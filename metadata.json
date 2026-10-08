@@ -1,0 +1,8 @@
+{
+  "name": "Remix Supevisi-guru",
+  "description": "Aplikasi Supervisi Guru untuk penilaian pra observasi, observasi pembelajaran, pasca observasi, dan rekapitulasi kesimpulan supervisi.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

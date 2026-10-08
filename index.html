@@ -1,0 +1,2747 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aplikasi Supervisi Guru</title>
+    <meta name="description" content="Aplikasi Supervisi Guru untuk penilaian pra observasi, observasi pembelajaran, pasca observasi, dan rekapitulasi kesimpulan supervisi.">
+    <meta property="og:title" content="Aplikasi Supervisi Guru">
+    <meta property="og:description" content="Aplikasi Supervisi Guru untuk penilaian pra observasi, observasi pembelajaran, pasca observasi, dan rekapitulasi kesimpulan supervisi.">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        .menu-active { 
+            background-color: #2563eb; 
+            border-left: 4px solid #facc15; 
+            color: #ffffff; 
+            font-weight: bold; 
+        }
+        .hidden-section { display: none; }
+        .submenu { max-height: 0; overflow: hidden; transition: max-height 0.35s ease, opacity 0.3s ease; opacity: 0; }
+        .submenu.open { max-height: 300px; opacity: 1; }
+        .arrow-icon { transition: transform 0.3s ease; display: inline-block; }
+        .arrow-icon.rotated { transform: rotate(90deg); }
+        #modal-overlay { transition: opacity 0.25s ease; }
+        #modal-overlay.hidden { opacity: 0; pointer-events: none; }
+        #modal-overlay:not(.hidden) { opacity: 1; pointer-events: auto; }
+        .modal-success #modal-header { background: linear-gradient(135deg, #10b981, #059669); }
+        .modal-success #modal-title { color: #fff; }
+        .modal-success #modal-btn { background: #10b981; }
+        .modal-success #modal-btn:hover { background: #059669; }
+        .modal-warning #modal-header { background: linear-gradient(135deg, #f59e0b, #d97706); }
+        .modal-warning #modal-title { color: #fff; }
+        .modal-warning #modal-btn { background: #f59e0b; }
+        .modal-warning #modal-btn:hover { background: #d97706; }
+        .modal-danger #modal-header { background: linear-gradient(135deg, #ef4444, #dc2626); }
+        .modal-danger #modal-title { color: #fff; }
+        .modal-danger #modal-btn { background: #ef4444; }
+        .modal-danger #modal-btn:hover { background: #dc2626; }
+        .modal-info #modal-header { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+        .modal-info #modal-title { color: #fff; }
+
+        /* Style untuk tombol PDF yang non-aktif */
+        .btn-pdf-disabled {
+            background-color: #9ca3af !important;
+            cursor: not-allowed !important;
+            opacity: 0.6;
+        }
+
+        /* Style untuk tombol Selanjutnya yang aktif dan non-aktif */
+        .btn-next-disabled {
+            background-color: #f3f4f6 !important;
+            color: #9ca3af !important;
+            border: 1px solid #d1d5db !important;
+            cursor: not-allowed !important;
+            opacity: 0.65;
+            box-shadow: none !important;
+        }
+        .btn-next-active {
+            background-color: #059669 !important;
+            color: #ffffff !important;
+            cursor: pointer !important;
+            opacity: 1 !important;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+        }
+        .btn-next-active:hover {
+            background-color: #047857 !important;
+        }
+
+        /* Style untuk menu sidebar yang terkunci / disabled */
+        .menu-disabled {
+            opacity: 0.4 !important;
+            cursor: not-allowed !important;
+            pointer-events: none !important;
+            background-color: transparent !important;
+        }
+
+        /* Menyembunyikan elemen non-cetak saat mencetak file PDF */
+        @media print {
+            .no-print, button, nav, aside, #modal-overlay, #alert {
+                display: none !important;
+            }
+            body {
+                background: #fff !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            main {
+                padding: 0 !important;
+                margin: 0 !important;
+                overflow: visible !important;
+            }
+            .content-section {
+                display: none !important;
+            }
+            .content-section.print-target {
+                display: block !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                box-shadow: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+        }
+    </style>
+    <script>
+        // ===== HELPER GENERATOR DOKUMEN CETAK & PDF RESMI =====
+        function buildPrintableHtml(sectionId, namaFile) {
+            var guruNama = (typeof activeGuruData !== 'undefined' && activeGuruData && activeGuruData.nama_guru) || 
+                           (document.getElementById('guru_nama') ? document.getElementById('guru_nama').value : '') || 
+                           'Basuki, S.Kom.';
+            var guruNip = (typeof activeGuruData !== 'undefined' && activeGuruData && activeGuruData.nip) || 
+                          (document.getElementById('guru_nip') ? document.getElementById('guru_nip').value : '') || 
+                          '-';
+            var guruSekolah = (typeof activeGuruData !== 'undefined' && activeGuruData && activeGuruData.sekolah) || 
+                              (document.getElementById('guru_sekolah') ? document.getElementById('guru_sekolah').value : '') || 
+                              'SDN Perhentian Raja';
+            var guruJenjang = (typeof activeGuruData !== 'undefined' && activeGuruData && activeGuruData.jenjang) || 
+                              (document.getElementById('guru_jenjang') ? document.getElementById('guru_jenjang').value : '') || 
+                              'SD';
+            var guruMapel = (typeof activeGuruData !== 'undefined' && activeGuruData && activeGuruData.mata_pelajaran) || 
+                            (document.getElementById('guru_mapel') ? document.getElementById('guru_mapel').value : '') || 
+                            'IPAS';
+            var guruKelas = (typeof activeGuruData !== 'undefined' && activeGuruData && activeGuruData.kelas_semester) || 
+                            (document.getElementById('guru_kelas') ? document.getElementById('guru_kelas').value : '') || 
+                            'Kelas 3/1';
+
+            var tanggalSupervisi = new Date().toLocaleDateString('id-ID', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric'
+            });
+
+            var wrap = document.createElement('div');
+            wrap.className = 'printable-document-container';
+            wrap.style.cssText = 'font-family: Arial, "Helvetica Neue", Helvetica, sans-serif; color: #111827; background: #ffffff; padding: 24px 28px; box-sizing: border-box; line-height: 1.4;';
+
+            // KOP SURAT DINAS RESMI
+            var kopHtml = 
+                '<div style="text-align: center; border-bottom: 3px double #1e3a8a; padding-bottom: 10px; margin-bottom: 14px;">' +
+                    '<div style="font-size: 13pt; font-weight: bold; text-transform: uppercase; color: #1e3a8a; letter-spacing: 0.5px;">PEMERINTAH KABUPATEN KAMPAR</div>' +
+                    '<div style="font-size: 14pt; font-weight: 800; text-transform: uppercase; color: #111827; letter-spacing: 0.5px;">DINAS PENDIDIKAN KEPEMUDAAN DAN OLAHRAGA</div>' +
+                    '<div style="font-size: 12pt; font-weight: bold; text-transform: uppercase; color: #2563eb;">KOORDINATOR WILAYAH KECAMATAN PERHENTIAN RAJA</div>' +
+                    '<div style="font-size: 8.5pt; font-style: italic; color: #4b5563; margin-top: 3px;">Wilayah Binaan Satuan Pendidikan TK/SD Kec. Perhentian Raja - Kab. Kampar, Riau</div>' +
+                '</div>';
+
+            // 1. DOKUMEN REKAPITULASI KESIMPULAN (LANDSCAPE)
+            if (sectionId === 'kesimpulan') {
+                var tableEl = document.getElementById('kesimpulan-table');
+                var tableClone = tableEl ? tableEl.cloneNode(true) : null;
+
+                wrap.innerHTML = kopHtml +
+                    '<div style="text-align: center; margin-bottom: 14px;">' +
+                        '<div style="font-size: 13pt; font-weight: bold; text-decoration: underline; text-transform: uppercase;">REKAPITULASI KESIMPULAN HASIL SUPERVISI GURU</div>' +
+                        '<div style="font-size: 9.5pt; color: #4b5563; margin-top: 2px;">Tahun Ajaran 2025 / 2026 - Wilayah Binaan Pengawas TK/SD</div>' +
+                    '</div>' +
+                    '<table style="width: 100%; margin-bottom: 12px; font-size: 9pt; border-collapse: collapse;">' +
+                        '<tr>' +
+                            '<td style="width: 20%; padding: 2px 0;"><strong>Pengawas Pembina</strong></td><td style="width: 2%;">:</td><td style="width: 40%;"><strong>Basuki, S.Kom.</strong></td>' +
+                            '<td style="width: 18%; padding: 2px 0;"><strong>Tanggal Cetak</strong></td><td style="width: 2%;">:</td><td style="width: 20%;">' + tanggalSupervisi + '</td>' +
+                        '</tr>' +
+                        '<tr>' +
+                            '<td style="padding: 2px 0;"><strong>Jabatan</strong></td><td>:</td><td>Pengawas TK/SD Kec. Perhentian Raja</td>' +
+                            '<td style="padding: 2px 0;"><strong>Status Rekap</strong></td><td>:</td><td>Seluruh Guru Terdaftar</td>' +
+                        '</tr>' +
+                    '</table>' +
+                    '<div id="table-wrap-slot" style="width: 100%; margin-bottom: 18px;"></div>' +
+                    '<table style="width: 100%; margin-top: 20px; font-size: 9.5pt; border-collapse: collapse; text-align: center;">' +
+                        '<tr>' +
+                            '<td style="width: 60%;"></td>' +
+                            '<td style="width: 40%; vertical-align: top;">' +
+                                'Perhentian Raja, ' + tanggalSupervisi + '<br>' +
+                                'Pengawas Pembina / Supervisor,' +
+                                '<br><br><br><br>' +
+                                '<strong style="text-decoration: underline; font-size: 10.5pt;">Basuki, S.Kom.</strong><br>' +
+                                'Pengawas TK/SD Kec. Perhentian Raja' +
+                            '</td>' +
+                        '</tr>' +
+                    '</table>';
+
+                if (tableClone) {
+                    tableClone.style.width = '100%';
+                    tableClone.style.fontSize = '7.5pt';
+                    tableClone.style.borderCollapse = 'collapse';
+                    tableClone.querySelectorAll('th, td').forEach(function(c) {
+                        c.style.border = '1px solid #4b5563';
+                        c.style.padding = '4px 3px';
+                    });
+                    wrap.querySelector('#table-wrap-slot').appendChild(tableClone);
+                }
+                return wrap;
+            }
+
+            // 1b. DOKUMEN REKAPITULASI DB PASCA UMPAN BALIK (LANDSCAPE)
+            if (sectionId === 'db-pasca-umpan-balik') {
+                var tableEl = document.getElementById('table-db-pasca-umpan-balik');
+                var tableClone = tableEl ? tableEl.cloneNode(true) : null;
+
+                if (tableClone) {
+                    var actionHeaders = tableClone.querySelectorAll('.no-print');
+                    actionHeaders.forEach(function(el) { el.remove(); });
+                    var rows = tableClone.querySelectorAll('tr');
+                    rows.forEach(function(r) {
+                        var lastCell = r.querySelector('td:last-child');
+                        if (lastCell && lastCell.classList.contains('no-print')) {
+                            lastCell.remove();
+                        }
+                    });
+                    tableClone.style.width = '100%';
+                    tableClone.style.fontSize = '8pt';
+                    tableClone.style.borderCollapse = 'collapse';
+                    tableClone.querySelectorAll('th, td').forEach(function(c) {
+                        c.style.border = '1px solid #4b5563';
+                        c.style.padding = '5px 4px';
+                    });
+                }
+
+                wrap.innerHTML = kopHtml +
+                    '<div style="text-align: center; margin-bottom: 14px;">' +
+                        '<div style="font-size: 13pt; font-weight: bold; text-decoration: underline; text-transform: uppercase;">DATABASE REKAPITULASI PASCA UMPAN BALIK SUPERVISI GURU</div>' +
+                        '<div style="font-size: 9.5pt; color: #4b5563; margin-top: 2px;">Tahun Ajaran 2025 / 2026 - Wilayah Binaan Pengawas TK/SD Kec. Perhentian Raja</div>' +
+                    '</div>' +
+                    '<table style="width: 100%; margin-bottom: 12px; font-size: 9pt; border-collapse: collapse;">' +
+                        '<tr>' +
+                            '<td style="width: 20%; padding: 2px 0;"><strong>Pengawas Pembina</strong></td><td style="width: 2%;">:</td><td style="width: 40%;"><strong>Basuki, S.Kom.</strong></td>' +
+                            '<td style="width: 18%; padding: 2px 0;"><strong>Tanggal Cetak</strong></td><td style="width: 2%;">:</td><td style="width: 20%;">' + tanggalSupervisi + '</td>' +
+                        '</tr>' +
+                        '<tr>' +
+                            '<td style="padding: 2px 0;"><strong>Kategori Dokumen</strong></td><td>:</td><td>DB Pasca Umpan Balik (PM)</td>' +
+                            '<td style="padding: 2px 0;"><strong>Status Rekap</strong></td><td>:</td><td>Seluruh Guru Berumpan Balik</td>' +
+                        '</tr>' +
+                    '</table>' +
+                    '<div id="table-wrap-slot-db" style="width: 100%; margin-bottom: 18px;"></div>' +
+                    '<table style="width: 100%; margin-top: 20px; font-size: 9.5pt; border-collapse: collapse; text-align: center;">' +
+                        '<tr>' +
+                            '<td style="width: 60%;"></td>' +
+                            '<td style="width: 40%; vertical-align: top;">' +
+                                'Perhentian Raja, ' + tanggalSupervisi + '<br>' +
+                                'Pengawas Pembina / Supervisor,' +
+                                '<br><br><br><br>' +
+                                '<strong style="text-decoration: underline; font-size: 10.5pt;">Basuki, S.Kom.</strong><br>' +
+                                'Pengawas TK/SD Kec. Perhentian Raja' +
+                            '</td>' +
+                        '</tr>' +
+                    '</table>';
+
+                if (tableClone) {
+                    var slotDb = wrap.querySelector('#table-wrap-slot-db');
+                    if (slotDb) slotDb.appendChild(tableClone);
+                }
+                return wrap;
+            }
+
+            // 2. DOKUMEN UMPAN BALIK
+            if (sectionId === 'umpan-balik') {
+                var ubText = (document.getElementById('umpan_balik_text') ? document.getElementById('umpan_balik_text').innerText : '') || '-';
+                var refText = (document.getElementById('refleksi_text') ? document.getElementById('refleksi_text').value : '') || '-';
+
+                wrap.innerHTML = kopHtml +
+                    '<div style="text-align: center; margin-bottom: 16px;">' +
+                        '<div style="font-size: 13pt; font-weight: bold; text-decoration: underline; text-transform: uppercase;">LEMBAR UMPAN BALIK SUPERVISI PEMBELAJARAN</div>' +
+                        '<div style="font-size: 9.5pt; color: #4b5563; margin-top: 2px;">Tahun Ajaran 2025 / 2026</div>' +
+                    '</div>' +
+                    '<table style="width: 100%; margin-bottom: 16px; font-size: 9.5pt; border-collapse: collapse;">' +
+                        '<tr><td style="width: 22%; padding: 3px 0;"><strong>Nama Guru</strong></td><td style="width: 2%;">:</td><td style="width: 36%;"><strong>' + guruNama + '</strong></td><td style="width: 20%;"><strong>Mata Pelajaran</strong></td><td style="width: 2%;">:</td><td>' + guruMapel + '</td></tr>' +
+                        '<tr><td style="padding: 3px 0;"><strong>NIP</strong></td><td>:</td><td>' + guruNip + '</td><td><strong>Kelas / Semester</strong></td><td>:</td><td>' + guruKelas + '</td></tr>' +
+                        '<tr><td style="padding: 3px 0;"><strong>Sekolah</strong></td><td>:</td><td>' + guruSekolah + ' (' + guruJenjang + ')</td><td><strong>Tanggal Supervisi</strong></td><td>:</td><td>' + tanggalSupervisi + '</td></tr>' +
+                        '<tr><td style="padding: 3px 0;"><strong>Pengawas</strong></td><td>:</td><td>Basuki, S.Kom.</td><td><strong>Jenjang</strong></td><td>:</td><td>' + guruJenjang + '</td></tr>' +
+                    '</table>' +
+                    '<div style="margin-bottom: 16px;">' +
+                        '<div style="font-size: 10.5pt; font-weight: bold; background: #e0f2fe; padding: 6px 10px; border: 1px solid #bae6fd; border-radius: 4px; margin-bottom: 6px; color: #0369a1;">A. Refleksi Guru Pasca Observasi</div>' +
+                        '<div style="border: 1px solid #cbd5e1; border-radius: 4px; padding: 12px; font-size: 9.5pt; background: #f8fafc; line-height: 1.5; white-space: pre-wrap;">' + refText + '</div>' +
+                    '</div>' +
+                    '<div style="margin-bottom: 20px;">' +
+                        '<div style="font-size: 10.5pt; font-weight: bold; background: #dcfce7; padding: 6px 10px; border: 1px solid #bbf7d0; border-radius: 4px; margin-bottom: 6px; color: #15803d;">B. Catatan & Umpan Balik Pengawas</div>' +
+                        '<div style="border: 1px solid #cbd5e1; border-radius: 4px; padding: 12px; font-size: 9.5pt; background: #f8fafc; line-height: 1.5; white-space: pre-wrap;">' + ubText + '</div>' +
+                    '</div>' +
+                    '<table style="width: 100%; margin-top: 30px; font-size: 9.5pt; border-collapse: collapse; text-align: center;">' +
+                        '<tr>' +
+                            '<td style="width: 50%; vertical-align: top;">' +
+                                'Mengetahui / Mengonfirmasi,<br>Guru yang Disupervisi<br><br><br><br>' +
+                                '<strong style="text-decoration: underline; font-size: 10.5pt;">' + guruNama + '</strong><br>NIP. ' + guruNip +
+                            '</td>' +
+                            '<td style="width: 50%; vertical-align: top;">' +
+                                'Perhentian Raja, ' + tanggalSupervisi + '<br>Pengawas Pembina / Supervisor<br><br><br><br>' +
+                                '<strong style="text-decoration: underline; font-size: 10.5pt;">Basuki, S.Kom.</strong><br>Pengawas TK/SD Kec. Perhentian Raja' +
+                            '</td>' +
+                        '</tr>' +
+                    '</table>';
+                return wrap;
+            }
+
+            // 3. DOKUMEN TINDAK LANJUT
+            if (sectionId === 'tindak-lanjut') {
+                var tlText = (document.getElementById('tindak_lanjut_text') ? document.getElementById('tindak_lanjut_text').innerText : '') || '-';
+
+                wrap.innerHTML = kopHtml +
+                    '<div style="text-align: center; margin-bottom: 16px;">' +
+                        '<div style="font-size: 13pt; font-weight: bold; text-decoration: underline; text-transform: uppercase;">LEMBAR RENCANA TINDAK LANJUT HASIL SUPERVISI</div>' +
+                        '<div style="font-size: 9.5pt; color: #4b5563; margin-top: 2px;">Tahun Ajaran 2025 / 2026</div>' +
+                    '</div>' +
+                    '<table style="width: 100%; margin-bottom: 16px; font-size: 9.5pt; border-collapse: collapse;">' +
+                        '<tr><td style="width: 22%; padding: 3px 0;"><strong>Nama Guru</strong></td><td style="width: 2%;">:</td><td style="width: 36%;"><strong>' + guruNama + '</strong></td><td style="width: 20%;"><strong>Mata Pelajaran</strong></td><td style="width: 2%;">:</td><td>' + guruMapel + '</td></tr>' +
+                        '<tr><td style="padding: 3px 0;"><strong>NIP</strong></td><td>:</td><td>' + guruNip + '</td><td><strong>Kelas / Semester</strong></td><td>:</td><td>' + guruKelas + '</td></tr>' +
+                        '<tr><td style="padding: 3px 0;"><strong>Sekolah</strong></td><td>:</td><td>' + guruSekolah + ' (' + guruJenjang + ')</td><td><strong>Tanggal Supervisi</strong></td><td>:</td><td>' + tanggalSupervisi + '</td></tr>' +
+                        '<tr><td style="padding: 3px 0;"><strong>Pengawas</strong></td><td>:</td><td>Basuki, S.Kom.</td><td><strong>Jenjang</strong></td><td>:</td><td>' + guruJenjang + '</td></tr>' +
+                    '</table>' +
+                    '<div style="margin-bottom: 20px;">' +
+                        '<div style="font-size: 10.5pt; font-weight: bold; background: #fef3c7; padding: 6px 10px; border: 1px solid #fde68a; border-radius: 4px; margin-bottom: 6px; color: #b45309;">Rencana & Rekomendasi Tindak Lanjut:</div>' +
+                        '<div style="border: 1px solid #cbd5e1; border-radius: 4px; padding: 14px; font-size: 9.5pt; background: #f8fafc; line-height: 1.6; white-space: pre-wrap;">' + tlText + '</div>' +
+                    '</div>' +
+                    '<table style="width: 100%; margin-top: 30px; font-size: 9.5pt; border-collapse: collapse; text-align: center;">' +
+                        '<tr>' +
+                            '<td style="width: 50%; vertical-align: top;">' +
+                                'Mengetahui / Mengonfirmasi,<br>Guru yang Disupervisi<br><br><br><br>' +
+                                '<strong style="text-decoration: underline; font-size: 10.5pt;">' + guruNama + '</strong><br>NIP. ' + guruNip +
+                            '</td>' +
+                            '<td style="width: 50%; vertical-align: top;">' +
+                                'Perhentian Raja, ' + tanggalSupervisi + '<br>Pengawas Pembina / Supervisor<br><br><br><br>' +
+                                '<strong style="text-decoration: underline; font-size: 10.5pt;">Basuki, S.Kom.</strong><br>Pengawas TK/SD Kec. Perhentian Raja' +
+                            '</td>' +
+                        '</tr>' +
+                    '</table>';
+                return wrap;
+            }
+
+            // 3b. DOKUMEN HASIL UMPAN BALIK PM (PERENCANAAN PM & IMPLEMENTASI/REFLEKSI PM)
+            if (sectionId === 'hasil-umpan-balik') {
+                var rencMax = (typeof instrumenData !== 'undefined' && instrumenData['perencanaan_pm'] && instrumenData['perencanaan_pm'].maxScore) || 108;
+                var obsMax = (typeof instrumenData !== 'undefined' && instrumenData['implementasi_pm'] && instrumenData['implementasi_pm'].maxScore) || 128;
+                var maxGabungan = rencMax + obsMax;
+
+                var rencSkor = document.getElementById('skor-perencanaan_pm') ? (parseInt(document.getElementById('skor-perencanaan_pm').innerText) || 0) : (document.getElementById('pm-skor-rencana') ? (parseInt(document.getElementById('pm-skor-rencana').innerText) || 0) : 0);
+                var obsSkor = document.getElementById('skor-implementasi_pm') ? (parseInt(document.getElementById('skor-implementasi_pm').innerText) || 0) : (document.getElementById('pm-skor-obs') ? (parseInt(document.getElementById('pm-skor-obs').innerText) || 0) : 0);
+
+                var rencPersen = rencMax > 0 ? ((rencSkor / rencMax) * 100).toFixed(2) + '%' : '0%';
+                var rencPred = typeof getPMPredikat === 'function' ? getPMPredikat(rencMax > 0 ? (rencSkor / rencMax) * 100 : 0) : 'Kurang';
+
+                var obsPersen = obsMax > 0 ? ((obsSkor / obsMax) * 100).toFixed(2) + '%' : '0%';
+                var obsPred = typeof getPMPredikat === 'function' ? getPMPredikat(obsMax > 0 ? (obsSkor / obsMax) * 100 : 0) : 'Kurang';
+
+                var totalGabungan = rencSkor + obsSkor;
+                var gabPersen = maxGabungan > 0 ? ((totalGabungan / maxGabungan) * 100).toFixed(2) + '%' : '0%';
+                var gabPred = typeof getPMPredikat === 'function' ? getPMPredikat(maxGabungan > 0 ? (totalGabungan / maxGabungan) * 100 : 0) : 'Kurang';
+
+                var parsedKS = typeof parseKelasSemester === 'function' ? parseKelasSemester(guruKelas) : { kelas: guruKelas, semester: 'Semester 1 (Ganjil)' };
+
+                var kekuatanText = (document.getElementById('pm_kekuatan') ? document.getElementById('pm_kekuatan').value.trim() : '');
+                var peningkatanText = (document.getElementById('pm_peningkatan') ? document.getElementById('pm_peningkatan').value.trim() : '');
+                var rekomendasiText = (document.getElementById('pm_rekomendasi') ? document.getElementById('pm_rekomendasi').value.trim() : '');
+
+                if (!kekuatanText || !peningkatanText || !rekomendasiText) {
+                    if (typeof autoGenerateFeedbackPM === 'function') autoGenerateFeedbackPM();
+                    kekuatanText = (document.getElementById('pm_kekuatan') ? document.getElementById('pm_kekuatan').value.trim() : '') || 'Rancangan telaah RPP dan observasi kelas menunjukkan komitmen pendidik yang baik serta langkah pembelajaran yang terstruktur.';
+                    peningkatanText = (document.getElementById('pm_peningkatan') ? document.getElementById('pm_peningkatan').value.trim() : '') || 'Optimalisasi diferensiasi proses belajar dan penguatan instrumen asesmen formatif secara berkala.';
+                    rekomendasiText = (document.getElementById('pm_rekomendasi') ? document.getElementById('pm_rekomendasi').value.trim() : '') || '1. Berbagi praktik baik di Komunitas Belajar (Kombel) sekolah.\n2. Manfaatkan teknologi media interaktif untuk variasi belajar siswa.\n3. Konsisten lakukan refleksi bersama siswa di akhir pembelajaran.';
+                }
+
+                wrap.innerHTML = kopHtml +
+                    '<div style="text-align: center; margin-bottom: 16px;">' +
+                        '<div style="font-size: 13pt; font-weight: bold; text-decoration: underline; text-transform: uppercase;">LEMBAR HASIL UMPAN BALIK PEMBELAJARAN MENDALAM (PM)</div>' +
+                        '<div style="font-size: 9.5pt; color: #4b5563; margin-top: 2px;">Hasil Integrasi Perencanaan PM (Telaah RPP) dan Implementasi & Refleksi PM (Observasi Pembelajaran)</div>' +
+                    '</div>' +
+                    '<table style="width: 100%; margin-bottom: 14px; font-size: 9.5pt; border-collapse: collapse;">' +
+                        '<tr><td style="width: 20%; padding: 3px 0;"><strong>Nama Guru</strong></td><td style="width: 2%;">:</td><td style="width: 38%;"><strong>' + guruNama + '</strong></td><td style="width: 20%;"><strong>Mata Pelajaran</strong></td><td style="width: 2%;">:</td><td><strong>' + guruMapel + '</strong></td></tr>' +
+                        '<tr><td style="padding: 3px 0;"><strong>NIP</strong></td><td>:</td><td>' + guruNip + '</td><td><strong>Kelas</strong></td><td>:</td><td><strong>' + parsedKS.kelas + '</strong></td></tr>' +
+                        '<tr><td style="padding: 3px 0;"><strong>Sekolah</strong></td><td>:</td><td>' + guruSekolah + ' (' + guruJenjang + ')</td><td><strong>Semester</strong></td><td>:</td><td><strong>' + parsedKS.semester + '</strong></td></tr>' +
+                        '<tr><td style="padding: 3px 0;"><strong>Pengawas</strong></td><td>:</td><td>Basuki, S.Kom.</td><td><strong>Tanggal Supervisi</strong></td><td>:</td><td>' + tanggalSupervisi + '</td></tr>' +
+                    '</table>' +
+                    '<table style="width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 9pt; text-align: center;">' +
+                        '<thead>' +
+                            '<tr style="background-color: #1e3a8a; color: #ffffff;">' +
+                                '<th style="border: 1px solid #1e3a8a; padding: 6px; width: 35px;">No</th>' +
+                                '<th style="border: 1px solid #1e3a8a; padding: 6px; text-align: left;">Dimensi Supervisi PM</th>' +
+                                '<th style="border: 1px solid #1e3a8a; padding: 6px; width: 160px;">Format Acuan</th>' +
+                                '<th style="border: 1px solid #1e3a8a; padding: 6px; width: 95px;">Skor</th>' +
+                                '<th style="border: 1px solid #1e3a8a; padding: 6px; width: 85px;">Capaian (%)</th>' +
+                                '<th style="border: 1px solid #1e3a8a; padding: 6px; width: 100px;">Predikat</th>' +
+                            '</tr>' +
+                        '</thead>' +
+                        '<tbody>' +
+                            '<tr>' +
+                                '<td style="border: 1px solid #cbd5e1; padding: 6px;">1</td>' +
+                                '<td style="border: 1px solid #cbd5e1; padding: 6px; text-align: left;"><strong>Perencanaan PM (Telaah RPP / Modul Ajar)</strong></td>' +
+                                '<td style="border: 1px solid #cbd5e1; padding: 6px; font-size: 8pt; color: #1e3a8a;">Instrumen_Telaah RPP.pdf</td>' +
+                                '<td style="border: 1px solid #cbd5e1; padding: 6px; font-weight: bold;">' + rencSkor + ' / ' + rencMax + '</td>' +
+                                '<td style="border: 1px solid #cbd5e1; padding: 6px; font-weight: bold; color: #1e3a8a;">' + rencPersen + '</td>' +
+                                '<td style="border: 1px solid #cbd5e1; padding: 6px; font-weight: bold;">' + rencPred + '</td>' +
+                            '</tr>' +
+                            '<tr>' +
+                                '<td style="border: 1px solid #cbd5e1; padding: 6px;">2</td>' +
+                                '<td style="border: 1px solid #cbd5e1; padding: 6px; text-align: left;"><strong>Implementasi & Refleksi PM (Observasi Pembelajaran)</strong></td>' +
+                                '<td style="border: 1px solid #cbd5e1; padding: 6px; font-size: 8pt; color: #047857;">Instrumen observasi pembelajaran.pdf</td>' +
+                                '<td style="border: 1px solid #cbd5e1; padding: 6px; font-weight: bold;">' + obsSkor + ' / ' + obsMax + '</td>' +
+                                '<td style="border: 1px solid #cbd5e1; padding: 6px; font-weight: bold; color: #047857;">' + obsPersen + '</td>' +
+                                '<td style="border: 1px solid #cbd5e1; padding: 6px; font-weight: bold;">' + obsPred + '</td>' +
+                            '</tr>' +
+                            '<tr style="background-color: #f8fafc; font-weight: bold;">' +
+                                '<td colspan="3" style="border: 1px solid #cbd5e1; padding: 6px; text-align: right;">Rata-rata Capaian Pembelajaran Mendalam (PM):</td>' +
+                                '<td style="border: 1px solid #cbd5e1; padding: 6px; color: #6b21a8; font-size: 9.5pt;">' + totalGabungan + ' / ' + maxGabungan + '</td>' +
+                                '<td style="border: 1px solid #cbd5e1; padding: 6px; color: #6b21a8; font-size: 9.5pt;">' + gabPersen + '</td>' +
+                                '<td style="border: 1px solid #cbd5e1; padding: 6px; color: #6b21a8; font-size: 9.5pt;">' + gabPred + '</td>' +
+                            '</tr>' +
+                        '</tbody>' +
+                    '</table>' +
+                    '<div style="margin-bottom: 12px;">' +
+                        '<div style="font-size: 10pt; font-weight: bold; background: #dcfce7; padding: 5px 8px; border: 1px solid #bbf7d0; border-radius: 4px; margin-bottom: 4px; color: #15803d;">A. Kekuatan & Praktik Baik Guru</div>' +
+                        '<div style="border: 1px solid #cbd5e1; border-radius: 4px; padding: 8px 10px; font-size: 9pt; background: #f8fafc; line-height: 1.4; white-space: pre-wrap;">' + kekuatanText + '</div>' +
+                    '</div>' +
+                    '<div style="margin-bottom: 12px;">' +
+                        '<div style="font-size: 10pt; font-weight: bold; background: #fef3c7; padding: 5px 8px; border: 1px solid #fde68a; border-radius: 4px; margin-bottom: 4px; color: #b45309;">B. Aspek yang Perlu Ditingkatkan</div>' +
+                        '<div style="border: 1px solid #cbd5e1; border-radius: 4px; padding: 8px 10px; font-size: 9pt; background: #f8fafc; line-height: 1.4; white-space: pre-wrap;">' + peningkatanText + '</div>' +
+                    '</div>' +
+                    '<div style="margin-bottom: 16px;">' +
+                        '<div style="font-size: 10pt; font-weight: bold; background: #e0f2fe; padding: 5px 8px; border: 1px solid #bae6fd; border-radius: 4px; margin-bottom: 4px; color: #0369a1;">C. Rekomendasi & Tindak Lanjut PM</div>' +
+                        '<div style="border: 1px solid #cbd5e1; border-radius: 4px; padding: 8px 10px; font-size: 9pt; background: #f8fafc; line-height: 1.4; white-space: pre-wrap;">' + rekomendasiText + '</div>' +
+                    '</div>' +
+                    '<table style="width: 100%; margin-top: 20px; font-size: 9.5pt; border-collapse: collapse; text-align: center;">' +
+                        '<tr>' +
+                            '<td style="width: 50%; vertical-align: top;">' +
+                                'Mengetahui / Mengonfirmasi,<br>Guru yang Disupervisi<br><br><br><br>' +
+                                '<strong style="text-decoration: underline; font-size: 10.5pt;">' + guruNama + '</strong><br>NIP. ' + guruNip +
+                            '</td>' +
+                            '<td style="width: 50%; vertical-align: top;">' +
+                                'Perhentian Raja, ' + tanggalSupervisi + '<br>Pengawas Pembina / Supervisor<br><br><br><br>' +
+                                '<strong style="text-decoration: underline; font-size: 10.5pt;">Basuki, S.Kom.</strong><br>Pengawas TK/SD Kec. Perhentian Raja' +
+                            '</td>' +
+                        '</tr>' +
+                    '</table>';
+                return wrap;
+            }
+
+            // 4. DOKUMEN INSTRUMEN PENILAIAN (administrasi, atp, modul_ajar, observasi, perencanaan_pm, implementasi_pm)
+            var key = 'administrasi';
+            if (typeof instrumenData !== 'undefined') {
+                var foundKey = Object.keys(instrumenData).find(function(k) { return instrumenData[k].id === sectionId; });
+                if (foundKey) key = foundKey;
+            }
+            var data = (typeof instrumenData !== 'undefined' && instrumenData[key]) ? instrumenData[key] : {
+                title: 'Instrumen Supervisi Pembelajaran',
+                maxScore: 36,
+                options: [],
+                items: []
+            };
+
+            var rowsHtml = (data.items || []).map(function(item, idx) {
+                var isHeader = (typeof item === 'object' && item.isHeader);
+                var isSubItem = (typeof item === 'object' && item.isSubItem);
+                var itemText = typeof item === 'object' ? item.text : item;
+                var itemFormatted = itemText.replace(/\n/g, '<br>');
+
+                if (isHeader) {
+                    var itemCat = (typeof item === 'object' && item.category) 
+                        ? '<span style="color: #1e3a8a; font-weight: bold; font-size: 8pt; margin-right: 4px;">[' + item.category + ']</span> ' 
+                        : '';
+                    return '<tr style="background-color: #f1f5f9; border-bottom: 1.5px solid #64748b;">' +
+                        '<td style="border: 1px solid #94a3b8; padding: 6px; text-align: center; font-weight: bold; width: 35px; color: #1e3a8a;">' + item.number + '</td>' +
+                        '<td style="border: 1px solid #94a3b8; padding: 6px 8px; font-weight: bold; color: #0f172a;" colspan="3">' + itemCat + itemFormatted + '</td>' +
+                    '</tr>';
+                }
+
+                var checked = document.querySelector('input[name="ans-' + key + '-' + idx + '"]:checked');
+                var val = checked ? parseInt(checked.value) : 0;
+                var optObj = (data.options || []).find(function(o) { return o.v === val; });
+                var label = (key === 'perencanaan_pm' || key === 'implementasi_pm') ? ('Skor ' + val) : (optObj ? optObj.l : ('Skor ' + val));
+
+                if (isSubItem) {
+                    return '<tr style="border-bottom: 1px solid #cbd5e1;">' +
+                        '<td style="border: 1px solid #cbd5e1; padding: 5px 6px; text-align: center; font-weight: bold; width: 35px; color: #2563eb; font-size: 8.5pt;">' + item.subCode + '.</td>' +
+                        '<td style="border: 1px solid #cbd5e1; padding: 5px 8px 5px 18px; font-size: 8.5pt; color: #334155;"><strong style="color: #1e40af;">' + item.subCode + '. </strong>' + itemFormatted + '</td>' +
+                        '<td style="border: 1px solid #cbd5e1; padding: 5px 6px; text-align: center; font-weight: bold; width: 50px;">' + val + '</td>' +
+                        '<td style="border: 1px solid #cbd5e1; padding: 5px 8px; width: 140px; font-size: 8.5pt;">' + label + '</td>' +
+                    '</tr>';
+                }
+
+                var itemNumber = item.number || (idx + 1);
+                var itemCat = (typeof item === 'object' && item.category) 
+                    ? '<div style="color: #1e3a8a; font-weight: bold; font-size: 8pt; margin-bottom: 2px;">[' + item.category + ']</div>' 
+                    : '';
+
+                return '<tr style="border-bottom: 1px solid #374151;">' +
+                    '<td style="border: 1px solid #374151; padding: 5px 6px; text-align: center; font-weight: bold; width: 35px; vertical-align: top;">' + itemNumber + '</td>' +
+                    '<td style="border: 1px solid #374151; padding: 5px 8px; vertical-align: top;">' + itemCat + '<div style="line-height: 1.4;">' + itemFormatted + '</div></td>' +
+                    '<td style="border: 1px solid #374151; padding: 5px 6px; text-align: center; font-weight: bold; width: 50px; vertical-align: top;">' + val + '</td>' +
+                    '<td style="border: 1px solid #374151; padding: 5px 8px; width: 140px; font-size: 8.5pt; vertical-align: top;">' + label + '</td>' +
+                '</tr>';
+            }).join('');
+
+            var totalSkor = (document.getElementById('skor-' + key) ? document.getElementById('skor-' + key).innerText : '0');
+            var persen = (document.getElementById('persen-' + key) ? document.getElementById('persen-' + key).innerText : '0%');
+            var predikat = (document.getElementById('predikat-' + key) ? document.getElementById('predikat-' + key).innerText : '-');
+
+            wrap.innerHTML = kopHtml +
+                '<div style="text-align: center; margin-bottom: 14px;">' +
+                    '<div style="font-size: 13pt; font-weight: bold; text-decoration: underline; text-transform: uppercase;">' + data.title + '</div>' +
+                    '<div style="font-size: 9.5pt; color: #4b5563; margin-top: 2px;">Tahun Ajaran 2025 / 2026</div>' +
+                '</div>' +
+                '<table style="width: 100%; margin-bottom: 12px; font-size: 9.5pt; border-collapse: collapse;">' +
+                    '<tr><td style="width: 22%; padding: 2px 0;"><strong>Nama Guru</strong></td><td style="width: 2%;">:</td><td style="width: 36%;"><strong>' + guruNama + '</strong></td><td style="width: 20%;"><strong>Mata Pelajaran</strong></td><td style="width: 2%;">:</td><td>' + guruMapel + '</td></tr>' +
+                    '<tr><td style="padding: 2px 0;"><strong>NIP</strong></td><td>:</td><td>' + guruNip + '</td><td><strong>Kelas / Semester</strong></td><td>:</td><td>' + guruKelas + '</td></tr>' +
+                    '<tr><td style="padding: 2px 0;"><strong>Sekolah</strong></td><td>:</td><td>' + guruSekolah + ' (' + guruJenjang + ')</td><td><strong>Tanggal Supervisi</strong></td><td>:</td><td>' + tanggalSupervisi + '</td></tr>' +
+                    '<tr><td style="padding: 2px 0;"><strong>Pengawas</strong></td><td>:</td><td>Basuki, S.Kom.</td><td><strong>Jenjang</strong></td><td>:</td><td>' + guruJenjang + '</td></tr>' +
+                '</table>' +
+                '<table style="width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 9pt;">' +
+                    '<thead>' +
+                        '<tr style="background-color: #1e3a8a; color: #ffffff; text-align: center;">' +
+                            '<th style="border: 1px solid #1e3a8a; padding: 6px 4px; width: 35px;">No</th>' +
+                            '<th style="border: 1px solid #1e3a8a; padding: 6px 8px; text-align: left;">Aspek yang Dinilai</th>' +
+                            '<th style="border: 1px solid #1e3a8a; padding: 6px 4px; width: 50px;">Skor</th>' +
+                            '<th style="border: 1px solid #1e3a8a; padding: 6px 8px; width: 140px;">Keterangan</th>' +
+                        '</tr>' +
+                    '</thead>' +
+                    '<tbody>' + rowsHtml + '</tbody>' +
+                '</table>' +
+                '<div style="border: 1.5px solid #1e3a8a; background: #f0fdf4; padding: 8px 12px; margin-bottom: 18px; font-size: 9.5pt; display: flex; justify-content: space-between; align-items: center;">' +
+                    '<div><strong>Total Skor:</strong> <span style="font-size: 11pt; color: #1e3a8a; font-weight: bold;">' + totalSkor + '</span> / ' + data.maxScore + '</div>' +
+                    '<div><strong>Nilai Akhir:</strong> <span style="font-size: 11pt; color: #1e3a8a; font-weight: bold;">' + persen + '</span></div>' +
+                    '<div><strong>Predikat:</strong> <span style="font-size: 11pt; font-weight: bold; color: #166534;">' + predikat + '</span></div>' +
+                '</div>' +
+                '<table style="width: 100%; margin-top: 24px; font-size: 9.5pt; border-collapse: collapse; text-align: center;">' +
+                    '<tr>' +
+                        '<td style="width: 50%; vertical-align: top;">' +
+                            'Mengetahui / Mengonfirmasi,<br>Guru yang Disupervisi<br><br><br><br>' +
+                            '<strong style="text-decoration: underline; font-size: 10.5pt;">' + guruNama + '</strong><br>NIP. ' + guruNip +
+                        '</td>' +
+                        '<td style="width: 50%; vertical-align: top;">' +
+                            'Perhentian Raja, ' + tanggalSupervisi + '<br>Pengawas Pembina / Supervisor<br><br><br><br>' +
+                            '<strong style="text-decoration: underline; font-size: 10.5pt;">Basuki, S.Kom.</strong><br>Pengawas TK/SD Kec. Perhentian Raja' +
+                        '</td>' +
+                    '</tr>' +
+                '</table>';
+
+            return wrap;
+        }
+
+        // ===== FUNGSI DOWNLOAD PDF ASLI (MENGHASILKAN FILE .PDF SECARA NYATA) =====
+        async function downloadPDF(sectionId, namaFile) {
+            // Indikator loading pada tombol pemicu
+            var btn = null;
+            if (window.event && window.event.target) {
+                btn = window.event.target.closest('button');
+            }
+            var originalBtnHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="inline-flex items-center gap-2 text-white"><span>⏳</span><span>Menyiapkan PDF...</span></span>';
+            }
+
+            try {
+                // Pastikan pustaka html2pdf termuat
+                if (typeof html2pdf === 'undefined') {
+                    await new Promise(function(resolve, reject) {
+                        var s = document.createElement('script');
+                        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+                        s.onload = resolve;
+                        s.onerror = function() { reject(new Error('Gagal memuat pustaka html2pdf')); };
+                        document.head.appendChild(s);
+                    });
+                }
+
+                // Jika mendownload kesimpulan, pastikan data tabel sudah termuat
+                if (sectionId === 'kesimpulan') {
+                    var tbody = document.getElementById('kesimpulan-table-body');
+                    if (!tbody || tbody.innerText.includes('Memuat data') || tbody.children.length === 0) {
+                        if (typeof loadKesimpulan === 'function') {
+                            await loadKesimpulan();
+                        }
+                    }
+                }
+
+                // Jika mendownload hasil-umpan-balik, pastikan data hasil supervisi & umpan balik termuat
+                if (sectionId === 'hasil-umpan-balik') {
+                    if (!activeGuruId && window.allGuruList && window.allGuruList.length > 0) {
+                        await selectGuruSilent(window.allGuruList[0].id);
+                    }
+                    if (typeof renderHasilUmpanBalik === 'function') {
+                        renderHasilUmpanBalik();
+                    }
+                    var kEl = document.getElementById('pm_kekuatan');
+                    var pEl = document.getElementById('pm_peningkatan');
+                    var rEl = document.getElementById('pm_rekomendasi');
+                    if (kEl && !kEl.value && typeof autoGenerateFeedbackPM === 'function') {
+                        autoGenerateFeedbackPM();
+                    }
+                }
+
+                // Jika mendownload db-pasca-umpan-balik, pastikan datanya termuat
+                if (sectionId === 'db-pasca-umpan-balik') {
+                    if (typeof loadDbPascaUmpanBalik === 'function') {
+                        await loadDbPascaUmpanBalik();
+                    }
+                }
+
+                var isLandscape = (sectionId === 'kesimpulan' || sectionId === 'db-pasca-umpan-balik');
+                var container = buildPrintableHtml(sectionId, namaFile);
+
+                if (!container) {
+                    showModal('Data dokumen tidak ditemukan atau belum lengkap.', 'Pemberitahuan', 'warning');
+                    return;
+                }
+
+                // Tempatkan container di area rendering yang valid (bukan -9999px agar canvas tidak kosong)
+                container.style.position = 'absolute';
+                container.style.left = '0px';
+                container.style.top = '0px';
+                container.style.width = isLandscape ? '1080px' : '794px';
+                container.style.background = '#ffffff';
+                container.style.zIndex = '-9999';
+                container.style.opacity = '1';
+                container.style.pointerEvents = 'none';
+                document.body.appendChild(container);
+
+                var guruPrefix = (typeof activeGuruData !== 'undefined' && activeGuruData && activeGuruData.nama_guru) 
+                    ? activeGuruData.nama_guru.replace(/[^a-zA-Z0-9]/g, '_') + '_' 
+                    : '';
+                var filenameWithDate = (namaFile || 'Supervisi') + '_' + guruPrefix + new Date().toISOString().slice(0, 10) + '.pdf';
+
+                var opt = {
+                    margin: isLandscape ? [8, 8, 8, 8] : [10, 10, 10, 10],
+                    filename: filenameWithDate,
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: {
+                        scale: 2,
+                        useCORS: true,
+                        logging: false,
+                        scrollX: 0,
+                        scrollY: 0,
+                        windowWidth: isLandscape ? 1200 : 850
+                    },
+                    jsPDF: {
+                        unit: 'mm',
+                        format: 'a4',
+                        orientation: isLandscape ? 'landscape' : 'portrait'
+                    },
+                    pagebreak: { mode: ['css', 'legacy'] }
+                };
+
+                await html2pdf().set(opt).from(container).save();
+
+                // Hapus container sementara setelah selesai
+                if (container.parentNode) {
+                    container.parentNode.removeChild(container);
+                }
+
+                showModal('File PDF "' + filenameWithDate + '" berhasil diunduh ke perangkat Anda!', 'Download Berhasil', 'success');
+            } catch (err) {
+                console.error('Error generating PDF:', err);
+                showModal('Terjadi kendala saat membuat file PDF: ' + err.message + '\n\nSilakan coba lagi.', 'Gagal Mengunduh PDF', 'danger');
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalBtnHtml;
+                }
+            }
+        }
+
+        function downloadExcel(tableId, fileName) {
+            let table = document.getElementById(tableId);
+            if (!table) {
+                table = document.querySelector('#kesimpulan table');
+            }
+
+            if (!table) {
+                showModal('Tabel data tidak ditemukan!', 'Error', 'danger');
+                return;
+            }
+
+            // Clone tabel dan buang kolom / tombol dengan kelas .no-print
+            let tableClone = table.cloneNode(true);
+            tableClone.querySelectorAll('.no-print').forEach(function(el) { el.remove(); });
+            
+            // 1. Konversi tabel HTML ke Worksheet SheetJS
+            const sheetName = (fileName && fileName.includes('Pasca')) ? "DB Pasca Umpan Balik" : "Rekap Kesimpulan";
+            const wb = XLSX.utils.table_to_book(tableClone, { sheet: sheetName });
+            const ws = wb.Sheets[sheetName];
+
+            // 2. Definisi Style Border (Garis Tipis Hitam)
+            const borderStyle = {
+                top: { style: "thin", color: { rgb: "000000" } },
+                bottom: { style: "thin", color: { rgb: "000000" } },
+                left: { style: "thin", color: { rgb: "000000" } },
+                right: { style: "thin", color: { rgb: "000000" } }
+            };
+
+            // 3. Iterasi seluruh sel di sheet dan terapkan border
+            for (let cell in ws) {
+                if (cell[0] === '!') continue;
+                
+                if (!ws[cell].s) ws[cell].s = {};
+                ws[cell].s.border = borderStyle;
+            }
+
+            // 4. Unduh File Excel dengan Border
+            const filenameWithDate = fileName + '_' + new Date().toISOString().slice(0, 10) + '.xlsx';
+            XLSX.writeFile(wb, filenameWithDate);
+        }
+    </script>
+</head>
+<body class="bg-gray-50 flex h-screen text-gray-800 font-sans">
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-blue-900 text-white flex flex-col h-full shadow-lg overflow-y-auto z-10 flex-shrink-0 no-print">
+        <div class="p-5 font-bold text-2xl border-b border-blue-800 text-center tracking-wide">
+            Supervisi <span class="text-blue-400">Guru V.1</span>
+        </div>
+        <nav class="flex-1 py-3 text-xl">
+            <button onclick="nav('dashboard', this)" class="menu-btn w-full text-left py-3 px-5 hover:bg-blue-800 menu-active">🏠 Dashboard</button>
+            <button onclick="nav('identitas', this)" class="menu-btn w-full text-left py-3 px-5 hover:bg-blue-800">👤 Identitas Guru</button>
+            
+            <!-- Pra Observasi (toggle) - Restricted -->
+            <button onclick="toggleSubmenu('pra-sub', this)" class="menu-btn restricted-menu menu-disabled w-full text-left py-3 px-5 hover:bg-blue-800 mt-2 font-bold flex justify-between items-center">
+                <span>📋 Pra Observasi</span>
+                <span class="arrow-icon" id="arrow-pra-sub">▶</span>
+            </button>
+            <div id="pra-sub" class="submenu">
+                <button onclick="nav('sup-admin', this)" class="menu-btn restricted-menu menu-disabled w-full text-left py-2 px-8 hover:bg-blue-800 pl-10">Supervisi Administrasi</button>
+                <button onclick="nav('sup-atp', this)" class="menu-btn restricted-menu menu-disabled w-full text-left py-2 px-8 hover:bg-blue-800 pl-10">Penelaah ATP</button>
+                <button onclick="nav('sup-modul', this)" class="menu-btn restricted-menu menu-disabled w-full text-left py-2 px-8 hover:bg-blue-800 pl-10">Penelaah Modul Ajar</button>
+            </div>
+
+            <!-- Observasi - Restricted -->
+            <button onclick="nav('observasi', this)" class="menu-btn restricted-menu menu-disabled w-full text-left py-3 px-5 hover:bg-blue-800 mt-2 font-bold">👁️ Observasi</button>
+            
+            <!-- Pasca Observasi (toggle) - Restricted -->
+            <button onclick="toggleSubmenu('pasca-sub', this)" class="menu-btn restricted-menu menu-disabled w-full text-left py-3 px-5 hover:bg-blue-800 mt-2 font-bold flex justify-between items-center">
+                <span>📝 Pasca Observasi</span>
+                <span class="arrow-icon" id="arrow-pasca-sub">▶</span>
+            </button>
+            <div id="pasca-sub" class="submenu">
+                <button onclick="nav('refleksi', this)" class="menu-btn restricted-menu menu-disabled w-full text-left py-2 px-8 hover:bg-blue-800 pl-10">Refleksi</button>
+                <button onclick="nav('umpan-balik', this)" class="menu-btn restricted-menu menu-disabled w-full text-left py-2 px-8 hover:bg-blue-800 pl-10">Umpan Balik</button>
+                <button onclick="nav('tindak-lanjut', this)" class="menu-btn restricted-menu menu-disabled w-full text-left py-2 px-8 hover:bg-blue-800 pl-10">Tindak Lanjut</button>
+            </div>
+
+            <!-- Kesimpulan - Restricted -->
+            <button onclick="nav('kesimpulan', this)" class="menu-btn restricted-menu menu-disabled w-full text-left py-3 px-5 hover:bg-blue-800 mt-2 font-bold">📊 Kesimpulan</button>
+
+            <!-- UMPAN BALIK PM (toggle) -->
+            <button onclick="toggleSubmenu('umpan-balik-pm-sub', this)" class="menu-btn w-full text-left py-3 px-5 hover:bg-blue-800 mt-2 font-bold flex justify-between items-center border-t border-blue-800/60 pt-3">
+                <span>💬 UMPAN BALIK</span>
+                <span class="arrow-icon" id="arrow-umpan-balik-pm-sub">▶</span>
+            </button>
+            <div id="umpan-balik-pm-sub" class="submenu">
+                <button onclick="nav('perencanaan-pm', this)" class="menu-btn restricted-menu menu-disabled w-full text-left py-2 px-8 hover:bg-blue-800 pl-10">Perencanaan PM</button>
+                <button onclick="nav('implementasi-pm', this)" class="menu-btn restricted-menu menu-disabled w-full text-left py-2 px-8 hover:bg-blue-800 pl-10">Implementasi & Refleksi PM</button>
+                <button onclick="nav('hasil-umpan-balik', this)" class="menu-btn restricted-menu menu-disabled w-full text-left py-2 px-8 hover:bg-blue-800 pl-10">Hasil Umpan Balik</button>
+                <button onclick="nav('db-pasca-umpan-balik', this)" class="menu-btn w-full text-left py-2 px-8 hover:bg-blue-800 pl-10 flex items-center justify-between">
+                    <span>DB Pasca Umpan Balik</span>
+                    <span id="badge-count-db-pm" class="bg-blue-500/40 text-blue-200 text-xs px-2 py-0.5 rounded-full font-bold">0</span>
+                </button>
+            </div>
+        </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 overflow-y-auto p-8 relative">
+        <!-- Global Alert -->
+        <div id="alert" class="hidden absolute top-4 right-8 bg-green-500 text-white px-4 py-2 rounded shadow-md transition-opacity no-print">Berhasil disimpan!</div>
+        
+        <!-- Dashboard -->
+        <section id="dashboard" class="content-section">
+            <div class="flex items-center justify-between mb-6 flex-wrap gap-4">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-700">Dashboard Supervisi</h2>
+                    <p class="text-base text-gray-500">Ringkasan status supervisi dan daftar guru</p>
+                </div>
+                <button onclick="refreshDataGuru()" class="btn-refresh-action no-print flex items-center gap-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold py-2 px-4 rounded-lg shadow transition text-base">
+                    <svg class="w-5 h-5 icon-refresh-spin transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    <span>🔄 Refresh Data Guru</span>
+                </button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-white p-6 rounded-lg shadow border-t-4 border-blue-500">
+                    <h3 class="text-xl font-semibold text-gray-500 uppercase">Total Guru</h3>
+                    <p class="text-3xl font-bold text-blue-600 mt-2" id="dash-total-guru">0</p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow border-t-4 border-green-500">
+                    <h3 class="text-xl font-semibold text-gray-500 uppercase">Rata-rata Skor Observasi</h3>
+                    <p class="text-3xl font-bold text-green-600 mt-2"><span id="dash-avg-obs">0</span>%</p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow border-t-4 border-purple-500">
+                    <h3 class="text-xl font-semibold text-gray-500 uppercase">Total Supervisi Selesai</h3>
+                    <p class="text-3xl font-bold text-purple-600 mt-2" id="dash-total-sup">0</p>
+                </div>
+            </div>
+
+            <!-- Tabel Daftar Guru -->
+            <div class="bg-white p-6 rounded-lg shadow mt-6">
+                <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-700">Daftar Guru yang Disupervisi</h3>
+                        <p class="text-sm text-gray-500">Pilih guru untuk melakukan penilaian atau melihat hasil</p>
+                    </div>
+                    <button onclick="refreshDataGuru()" class="btn-refresh-action no-print flex items-center gap-2 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 font-semibold py-1.5 px-3 rounded-lg border border-gray-300 shadow-sm transition text-base">
+                        <svg class="w-4 h-4 icon-refresh-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                        <span>🔄 Update Tabel Guru</span>
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-xl">
+                        <thead>
+                            <tr class="bg-blue-900 text-white">
+                                <th class="p-3 text-center">No</th>
+                                <th class="p-3">Nama</th>
+                                <th class="p-3">NIP</th>
+                                <th class="p-3">Kelas</th>
+                                <th class="p-3">Bidang Studi</th>
+                                <th class="p-3 text-center">Status</th>
+                                <th class="p-3 text-center">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dashboard-table-body">
+                            <tr><td colspan="7" class="p-4 text-center text-gray-400">Memuat data...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Identitas Guru -->
+        <section id="identitas" class="content-section hidden-section">
+            <h2 class="text-2xl font-bold mb-6 text-gray-700">Identitas Guru</h2>
+            <div class="bg-white p-6 rounded-lg shadow">
+                <form id="form-identitas" onsubmit="submitIdentitas(event)">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xl font-medium text-gray-700">Nama Guru</label>
+                            <input type="text" id="guru_nama" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2">
+                        </div>
+                        <div>
+                            <label class="block text-xl font-medium text-gray-700">NIP</label>
+                            <input type="text" id="guru_nip" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2">
+                        </div>
+                        <div>
+                            <label class="block text-xl font-medium text-gray-700">Sekolah</label>
+                            <input type="text" id="guru_sekolah" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2">
+                        </div>
+                        <div>
+                            <label class="block text-xl font-medium text-gray-700">Jenjang</label>
+                            <select id="guru_jenjang" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2 bg-white">
+                                <option value="">-- Pilih Jenjang --</option>
+                                <option value="SD">SD</option>
+                                <option value="SMP">SMP</option>
+                                <option value="SMA">SMA</option>
+                                <option value="SMK">SMK</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xl font-medium text-gray-700">Mata Pelajaran</label>
+                            <select id="guru_mapel" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2 bg-white">
+                                <option value="">-- Pilih Mata Pelajaran --</option>
+                                <option value="Pendidikan Agama Islam">Pendidikan Agama Islam</option>
+                                <option value="Pendidikan Agama Kristen">Pendidikan Agama Kristen</option>
+                                <option value="Pendidikan Pancasila">Pendidikan Pancasila</option>
+                                <option value="Bahasa Indonesia">Bahasa Indonesia</option>
+                                <option value="Matematika">Matematika</option>
+                                <option value="IPAS">IPAS</option>
+                                <option value="IPA">IPA</option>
+                                <option value="IPS">IPS</option>
+                                <option value="PJOK">PJOK</option>
+                                <option value="Seni Rupa">Seni Rupa</option>
+                                <option value="Bahasa Inggris">Bahasa Inggris</option>
+                                <option value="Muatan Lokal / Bahasa Daerah">Muatan Lokal / Bahasa Daerah</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xl font-medium text-gray-700">Kelas/Semester</label>
+                            <select id="guru_kelas" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2 bg-white">
+                                <option value="">-- Pilih Kelas/Semester --</option>
+                                <option value="Kelas 1/1">Kelas 1/1</option>
+                                <option value="Kelas 1/2">Kelas 1/2</option>
+                                <option value="Kelas 2/1">Kelas 2/1</option>
+                                <option value="Kelas 2/2">Kelas 2/2</option>
+                                <option value="Kelas 3/1">Kelas 3/1</option>
+                                <option value="Kelas 3/2">Kelas 3/2</option>
+                                <option value="Kelas 4/1">Kelas 4/1</option>
+                                <option value="Kelas 4/2">Kelas 4/2</option>
+                                <option value="Kelas 5/1">Kelas 5/1</option>
+                                <option value="Kelas 5/2">Kelas 5/2</option>
+                                <option value="Kelas 6/1">Kelas 6/1</option>
+                                <option value="Kelas 6/2">Kelas 6/2</option>
+                                <option value="Kelas 7/1">Kelas 7/1</option>
+                                <option value="Kelas 7/2">Kelas 7/2</option>
+                                <option value="Kelas 8/1">Kelas 8/1</option>
+                                <option value="Kelas 8/2">Kelas 8/2</option>
+                                <option value="Kelas 9/1">Kelas 9/1</option>
+                                <option value="Kelas 9/2">Kelas 9/2</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mt-6">
+                        <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700">Simpan Identitas</button>
+                    </div>
+                </form>
+                <div id="guru_id_display" class="mt-4 text-xl text-green-600 hidden">ID Guru Aktif: <span id="current_guru_id" class="font-bold"></span></div>
+            </div>
+        </section>
+
+        <!-- Template Section for Instruments -->
+        <section id="sup-admin" class="content-section hidden-section"></section>
+        <section id="sup-atp" class="content-section hidden-section"></section>
+        <section id="sup-modul" class="content-section hidden-section"></section>
+        <section id="observasi" class="content-section hidden-section"></section>
+        <section id="perencanaan-pm" class="content-section hidden-section"></section>
+        <section id="implementasi-pm" class="content-section hidden-section"></section>
+
+        <!-- Pasca Observasi: Refleksi -->
+        <section id="refleksi" class="content-section hidden-section">
+            <h2 class="text-2xl font-bold mb-6 text-gray-700">Refleksi Guru</h2>
+            <div class="bg-white p-6 rounded-lg shadow">
+                <form onsubmit="submitRefleksi(event)">
+                    <label class="block text-xl font-medium text-gray-700 mb-2">Tuliskan hasil refleksi guru pasca observasi:</label>
+                    <textarea id="refleksi_text" rows="6" class="w-full border rounded-md p-3" required></textarea>
+                    <button type="submit" class="mt-4 bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700">Kirim Refleksi & Buat Umpan Balik</button>
+                </form>
+            </div>
+        </section>
+
+        <!-- Pasca Observasi: Umpan Balik -->
+        <section id="umpan-balik" class="content-section hidden-section">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-2xl font-bold text-gray-700">Umpan Balik Otomatis</h2>
+                <button onclick="downloadPDF('umpan-balik', 'Umpan_Balik')" class="no-print flex items-center gap-2 bg-purple-700 hover:bg-purple-800 text-white font-semibold py-2 px-4 rounded-lg shadow transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    <span>Download PDF</span>
+                </button>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow">
+                <p class="text-gray-500 mb-4 text-xl no-print">Umpan balik dihasilkan secara otomatis berdasarkan skor observasi dan teks refleksi.</p>
+                <div id="umpan_balik_text" class="p-4 bg-blue-50 border border-blue-200 rounded-md whitespace-pre-wrap">Belum ada umpan balik. Harap isi identitas, selesaikan observasi, dan kirim refleksi terlebih dahulu.</div>
+            </div>
+        </section>
+
+        <!-- Pasca Observasi: Tindak Lanjut -->
+        <section id="tindak-lanjut" class="content-section hidden-section">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-2xl font-bold text-gray-700">Tindak Lanjut Otomatis</h2>
+                <button onclick="downloadPDF('tindak-lanjut', 'Tindak_Lanjut')" class="no-print flex items-center gap-2 bg-purple-700 hover:bg-purple-800 text-white font-semibold py-2 px-4 rounded-lg shadow transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    <span>Download PDF</span>
+                </button>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow">
+                <p class="text-gray-500 mb-4 text-xl no-print">Rekomendasi tindak lanjut berdasarkan hasil keseluruhan.</p>
+                <div id="tindak_lanjut_text" class="p-4 bg-green-50 border border-green-200 rounded-md whitespace-pre-wrap">Belum ada tindak lanjut.</div>
+            </div>
+        </section>
+
+        <!-- Hasil Umpan Balik (Perencanaan PM dan Implementasi & Refleksi PM) -->
+        <section id="hasil-umpan-balik" class="content-section hidden-section">
+            <div class="flex items-center justify-between mb-6 flex-wrap gap-4">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-700">Hasil Umpan Balik Pembelajaran Mendalam (PM)</h2>
+                    <p class="text-base text-gray-500">Integrasi hasil Perencanaan PM (Telaah RPP) dan Implementasi & Refleksi PM (Observasi Pembelajaran)</p>
+                </div>
+                
+                <div class="flex items-center gap-3 no-print">
+                    <button onclick="downloadPDF('hasil-umpan-balik', 'Hasil_Umpan_Balik_PM')" class="flex items-center gap-2 bg-purple-700 hover:bg-purple-800 text-white font-semibold py-2 px-4 rounded-lg shadow transition">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        <span>Download PDF</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Kartu Pemilihan Guru & Detail Identitas Hasil Umpan Balik -->
+            <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 mb-6 shadow-sm no-print">
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div class="flex-1">
+                        <label class="block text-sm font-bold text-blue-900 mb-1.5 flex items-center gap-2">
+                            <span>👤</span><span>Pilih Guru yang Disupervisi:</span>
+                        </label>
+                        <select id="select-guru-hasil-umpan-balik" onchange="changeActiveGuruFromDropdown(this.value)" class="w-full bg-white border border-blue-300 text-gray-800 text-base rounded-lg p-2.5 font-bold shadow-sm focus:ring-2 focus:ring-blue-500 cursor-pointer">
+                            <option value="">-- Memuat daftar guru... --</option>
+                        </select>
+                        <p class="text-xs text-blue-600 mt-1">Data guru diambil dari daftar guru di Dashboard</p>
+                    </div>
+                    <div class="lg:w-3/5 grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white p-3.5 rounded-lg border border-blue-100 shadow-sm">
+                        <div class="border-l-4 border-blue-500 pl-2.5">
+                            <span class="text-xs text-gray-500 font-semibold block uppercase">Mata Pelajaran</span>
+                            <span id="card-mapel-hasil-umpan-balik" class="font-bold text-gray-900 text-base truncate block">-</span>
+                        </div>
+                        <div class="border-l-4 border-indigo-500 pl-2.5">
+                            <span class="text-xs text-gray-500 font-semibold block uppercase">Kelas</span>
+                            <span id="card-kelas-hasil-umpan-balik" class="font-bold text-gray-900 text-base truncate block">-</span>
+                        </div>
+                        <div class="border-l-4 border-purple-500 pl-2.5">
+                            <span class="text-xs text-gray-500 font-semibold block uppercase">Semester</span>
+                            <span id="card-semester-hasil-umpan-balik" class="font-bold text-gray-900 text-base truncate block">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Kartu Skor Capaian -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                <!-- Card 1: Perencanaan PM -->
+                <div class="bg-white p-6 rounded-lg shadow border-t-4 border-blue-500 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm font-semibold uppercase text-blue-600 bg-blue-50 px-2 py-1 rounded">Telaah RPP</span>
+                            <span id="pm-badge-rencana" class="text-xs font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700">15 Butir (27 Sub-aspek)</span>
+                        </div>
+                        <h3 class="text-lg font-bold text-gray-800 mt-2">Perencanaan PM</h3>
+                        <p class="text-sm text-gray-500">Kesesuaian rancangan tujuan, langkah, materi & asesmen PM</p>
+                    </div>
+                    <div class="mt-4 pt-3 border-t border-gray-100">
+                        <div class="flex items-baseline justify-between">
+                            <span class="text-2xl font-black text-blue-700" id="pm-persen-rencana">0%</span>
+                            <span class="text-base text-gray-600">Skor: <strong id="pm-skor-rencana" class="text-gray-900">0</strong> / <span id="pm-max-rencana">108</span></span>
+                        </div>
+                        <div class="mt-2 text-sm">
+                            <span class="text-gray-500">Predikat: </span>
+                            <span id="pm-pred-rencana" class="font-bold text-blue-700">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 2: Implementasi & Refleksi PM -->
+                <div class="bg-white p-6 rounded-lg shadow border-t-4 border-emerald-500 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm font-semibold uppercase text-emerald-600 bg-emerald-50 px-2 py-1 rounded">Observasi & Refleksi</span>
+                            <span id="pm-badge-obs" class="text-xs font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700">15 Butir (32 Sub-aspek)</span>
+                        </div>
+                        <h3 class="text-lg font-bold text-gray-800 mt-2">Implementasi & Refleksi PM</h3>
+                        <p class="text-sm text-gray-500">Praktik mengajar mendalam & evaluasi diri di kelas</p>
+                    </div>
+                    <div class="mt-4 pt-3 border-t border-gray-100">
+                        <div class="flex items-baseline justify-between">
+                            <span class="text-2xl font-black text-emerald-700" id="pm-persen-obs">0%</span>
+                            <span class="text-base text-gray-600">Skor: <strong id="pm-skor-obs" class="text-gray-900">0</strong> / <span id="pm-max-obs">128</span></span>
+                        </div>
+                        <div class="mt-2 text-sm">
+                            <span class="text-gray-500">Predikat: </span>
+                            <span id="pm-pred-obs" class="font-bold text-emerald-700">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 3: Rata-rata Gabungan PM -->
+                <div class="bg-white p-6 rounded-lg shadow border-t-4 border-purple-500 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm font-semibold uppercase text-purple-600 bg-purple-50 px-2 py-1 rounded">Hasil Akhir PM</span>
+                            <span class="text-xs font-bold px-2 py-0.5 rounded bg-purple-100 text-purple-700">Terpadu</span>
+                        </div>
+                        <h3 class="text-lg font-bold text-gray-800 mt-2">Rata-rata Capaian PM</h3>
+                        <p class="text-sm text-gray-500">Sintesis menyeluruh perencanaan & implementasi</p>
+                    </div>
+                    <div class="mt-4 pt-3 border-t border-gray-100">
+                        <div class="flex items-baseline justify-between">
+                            <span class="text-2xl font-black text-purple-700" id="pm-persen-gabungan">0%</span>
+                            <span class="text-base text-gray-600">Total Skor: <strong id="pm-skor-gabungan" class="text-gray-900">0</strong> / <span id="pm-max-gabungan">236</span></span>
+                        </div>
+                        <div class="mt-2 text-sm">
+                            <span class="text-gray-500">Predikat PM: </span>
+                            <span id="pm-pred-gabungan" class="font-bold text-purple-700">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabel Komparasi -->
+            <div class="bg-white p-6 rounded-lg shadow mb-6">
+                <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <span>📋</span>
+                    <span>Tabel Ringkasan Supervisi Pembelajaran Mendalam (PM)</span>
+                </h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse border border-gray-300">
+                        <thead>
+                            <tr class="bg-blue-900 text-white text-center">
+                                <th class="p-3 border border-gray-400 w-12">No</th>
+                                <th class="p-3 border border-gray-400 text-left">Aspek / Dimensi PM</th>
+                                <th class="p-3 border border-gray-400 w-52">Format Acuan</th>
+                                <th class="p-3 border border-gray-400 w-28">Skor</th>
+                                <th class="p-3 border border-gray-400 w-28">Capaian (%)</th>
+                                <th class="p-3 border border-gray-400 w-32">Predikat</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="hover:bg-gray-50">
+                                <td class="p-3 border border-gray-300 text-center font-bold">1</td>
+                                <td class="p-3 border border-gray-300 font-semibold text-gray-800">
+                                    Perencanaan PM (Telaah RPP / Modul Ajar)
+                                    <div class="text-xs text-gray-500 font-normal mt-0.5">Keselarasan Tujuan, Kerangka Pembelajaran, Pengalaman Belajar (Memahami, Mengaplikasi, Merefleksi), Memuliakan, Karakteristik Murid, & Asesmen Awal-Proses-Akhir</div>
+                                </td>
+                                <td class="p-3 border border-gray-300 text-center text-sm font-medium text-blue-700 bg-blue-50">Instrumen_Telaah RPP.pdf</td>
+                                <td class="p-3 border border-gray-300 text-center font-bold text-gray-900"><span id="table-pm-skor-rencana">0</span> / 108</td>
+                                <td class="p-3 border border-gray-300 text-center font-bold text-blue-700" id="table-pm-persen-rencana">0%</td>
+                                <td class="p-3 border border-gray-300 text-center font-bold" id="table-pm-pred-rencana">-</td>
+                            </tr>
+                            <tr class="hover:bg-gray-50">
+                                <td class="p-3 border border-gray-300 text-center font-bold">2</td>
+                                <td class="p-3 border border-gray-300 font-semibold text-gray-800">
+                                    Implementasi & Refleksi PM (Observasi Pembelajaran)
+                                    <div class="text-xs text-gray-500 font-normal mt-0.5">Implementasi Awal-Inti-Penutup, Dimensi Profil, Kerangka Belajar, Saling Memuliakan, Pengalaman Memahami-Mengaplikasi-Merefleksi, & Asesmen Autentik</div>
+                                </td>
+                                <td class="p-3 border border-gray-300 text-center text-sm font-medium text-emerald-700 bg-emerald-50">Instrumen observasi pembelajaran.pdf</td>
+                                <td class="p-3 border border-gray-300 text-center font-bold text-gray-900"><span id="table-pm-skor-obs">0</span> / 128</td>
+                                <td class="p-3 border border-gray-300 text-center font-bold text-emerald-700" id="table-pm-persen-obs">0%</td>
+                                <td class="p-3 border border-gray-300 text-center font-bold" id="table-pm-pred-obs">-</td>
+                            </tr>
+                            <tr class="bg-gray-100 font-bold">
+                                <td colspan="3" class="p-3 border border-gray-300 text-right text-gray-800">Rata-rata Capaian Pembelajaran Mendalam (PM):</td>
+                                <td class="p-3 border border-gray-300 text-center font-bold text-purple-800"><span id="table-pm-skor-gabungan">0</span> / 236</td>
+                                <td class="p-3 border border-gray-300 text-center font-bold text-purple-800" id="table-pm-persen-gabungan">0%</td>
+                                <td class="p-3 border border-gray-300 text-center font-bold text-purple-800" id="table-pm-pred-gabungan">-</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Form Umpan Balik Terpadu (Kekuatan, Peningkatan, Rekomendasi) -->
+            <div class="bg-white p-6 rounded-lg shadow">
+                <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-800">Catatan Umpan Balik Pengawas / Supervisor</h3>
+                        <p class="text-sm text-gray-500">Tinjauan kualitatif konstruktif atas Perencanaan dan Implementasi & Refleksi PM</p>
+                    </div>
+                    <button type="button" onclick="autoGenerateFeedbackPM()" class="no-print text-sm bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 transition">
+                        <span>✨</span>
+                        <span>Muat Saran Otomatis</span>
+                    </button>
+                </div>
+
+                <form onsubmit="submitUmpanBalikPM(event)" class="space-y-5">
+                    <div>
+                        <label class="block text-base font-bold text-gray-700 mb-1.5">
+                            <span class="text-emerald-600 font-black">A.</span> Kekuatan & Praktik Baik Guru (Strengths)
+                        </label>
+                        <p class="text-xs text-gray-500 mb-2">Hal-hal positif, inovatif, dan terstruktur yang sudah berhasil ditunjukkan pada RPP dan praktik kelas:</p>
+                        <textarea id="pm_kekuatan" rows="3" class="w-full border border-gray-300 rounded-md p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Tuliskan kekuatan dan praktik baik guru..."></textarea>
+                    </div>
+
+                    <div>
+                        <label class="block text-base font-bold text-gray-700 mb-1.5">
+                            <span class="text-amber-600 font-black">B.</span> Aspek yang Perlu Ditingkatkan (Areas for Development)
+                        </label>
+                        <p class="text-xs text-gray-500 mb-2">Aspek atau butir pada telaah RPP maupun observasi/refleksi yang membutuhkan penguatan:</p>
+                        <textarea id="pm_peningkatan" rows="3" class="w-full border border-gray-300 rounded-md p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Tuliskan aspek yang perlu ditingkatkan..."></textarea>
+                    </div>
+
+                    <div>
+                        <label class="block text-base font-bold text-gray-700 mb-1.5">
+                            <span class="text-blue-600 font-black">C.</span> Rekomendasi & Rencana Tindak Lanjut PM
+                        </label>
+                        <p class="text-xs text-gray-500 mb-2">Langkah konkrit perbaikan pedagogis, pendampingan, atau berbagi praktik dalam Komunitas Belajar (Kombel):</p>
+                        <textarea id="pm_rekomendasi" rows="4" class="w-full border border-gray-300 rounded-md p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Tuliskan rekomendasi dan rencana tindak lanjut..."></textarea>
+                    </div>
+
+                    <div class="pt-3 border-t flex items-center justify-between flex-wrap gap-3">
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-lg shadow transition flex items-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                            <span>Simpan Catatan Umpan Balik</span>
+                        </button>
+                        <span id="pm-save-status" class="text-sm font-semibold text-green-600 hidden">Catatan umpan balik berhasil disimpan!</span>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <!-- DB Pasca Umpan Balik (Database Guru yang Sudah Diberikan Umpan Balik) -->
+        <section id="db-pasca-umpan-balik" class="content-section hidden-section">
+            <div class="flex items-center justify-between mb-6 flex-wrap gap-4">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-700 flex items-center gap-2">
+                        <span>📁</span>
+                        <span>DB Pasca Umpan Balik</span>
+                    </h2>
+                    <p class="text-base text-gray-500">Basis data dan rekapitulasi guru yang telah diberikan umpan balik supervisi pembelajaran</p>
+                </div>
+                
+                <div class="flex items-center gap-3 no-print flex-wrap">
+                    <button onclick="downloadExcel('table-db-pasca-umpan-balik', 'Database_Pasca_Umpan_Balik_PM')" class="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-4 rounded-lg shadow transition">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        <span>Download Excel</span>
+                    </button>
+                    <button onclick="downloadPDF('db-pasca-umpan-balik', 'Rekap_DB_Pasca_Umpan_Balik')" class="flex items-center gap-2 bg-purple-700 hover:bg-purple-800 text-white font-semibold py-2 px-4 rounded-lg shadow transition">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        <span>Download PDF</span>
+                    </button>
+                    <button onclick="loadDbPascaUmpanBalik()" class="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow transition">
+                        <span>🔄</span>
+                        <span>Refresh Data</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Kartu Statistik DB Pasca Umpan Balik -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
+                <div class="bg-white p-5 rounded-xl shadow border-t-4 border-blue-600">
+                    <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Guru Berumpan Balik</span>
+                    <div class="flex items-baseline justify-between mt-2">
+                        <span id="db-count-selesai" class="text-3xl font-black text-blue-700">0</span>
+                        <span class="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-bold">Terdata</span>
+                    </div>
+                    <span class="text-xs text-gray-500 mt-1 block">Telah diberikan umpan balik</span>
+                </div>
+                <div class="bg-white p-5 rounded-xl shadow border-t-4 border-emerald-600">
+                    <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Rata-rata Capaian PM</span>
+                    <div class="flex items-baseline justify-between mt-2">
+                        <span id="db-avg-persen" class="text-3xl font-black text-emerald-700">0%</span>
+                        <span id="db-predikat-umum" class="text-xs bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded font-bold">-</span>
+                    </div>
+                    <span class="text-xs text-gray-500 mt-1 block">Skor gabungan RPP & observasi</span>
+                </div>
+                <div class="bg-white p-5 rounded-xl shadow border-t-4 border-purple-600">
+                    <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Catatan Lengkap</span>
+                    <div class="flex items-baseline justify-between mt-2">
+                        <span id="db-count-catatan" class="text-3xl font-black text-purple-700">0</span>
+                        <span class="text-xs bg-purple-50 text-purple-700 px-2 py-0.5 rounded font-bold">Lengkap</span>
+                    </div>
+                    <span class="text-xs text-gray-500 mt-1 block">Kekuatan & Rekomendasi</span>
+                </div>
+                <div class="bg-white p-5 rounded-xl shadow border-t-4 border-amber-500">
+                    <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block">Perlu Perhatian</span>
+                    <div class="flex items-baseline justify-between mt-2">
+                        <span id="db-count-pending" class="text-3xl font-black text-amber-600">0</span>
+                        <span class="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded font-bold">Prioritas</span>
+                    </div>
+                    <span class="text-xs text-gray-500 mt-1 block">Butuh pendampingan lebih</span>
+                </div>
+            </div>
+
+            <!-- Filter & Pencarian -->
+            <div class="bg-white p-4 rounded-xl shadow mb-6 flex flex-col md:flex-row items-center justify-between gap-4 no-print">
+                <div class="flex-1 w-full flex items-center gap-2 border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500">
+                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    <input type="text" id="db-search-input" oninput="filterDbPascaUmpanBalik()" placeholder="Cari nama guru, NIP, mapel, kelas, atau rekomendasi..." class="w-full bg-transparent border-none outline-none text-base text-gray-800 placeholder-gray-400">
+                </div>
+                <div class="flex items-center gap-3 w-full md:w-auto">
+                    <select id="db-filter-status" onchange="filterDbPascaUmpanBalik()" class="border border-gray-300 rounded-lg px-3 py-2 text-sm font-semibold text-gray-700 bg-white shadow-sm focus:ring-2 focus:ring-blue-500">
+                        <option value="all_completed">Hanya Guru Berumpan Balik</option>
+                        <option value="all">Semua Guru (Termasuk Belum)</option>
+                        <option value="pred_sangat_baik">Predikat Sangat Baik</option>
+                        <option value="pred_baik">Predikat Baik</option>
+                        <option value="pred_cukup">Predikat Cukup / Kurang</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Tabel Data DB Pasca Umpan Balik -->
+            <div class="bg-white p-6 rounded-xl shadow overflow-x-auto">
+                <table id="table-db-pasca-umpan-balik" class="w-full text-left border-collapse border border-gray-300">
+                    <thead>
+                        <tr class="bg-blue-900 text-white text-center font-bold text-sm">
+                            <th class="p-3 border border-gray-400 w-12">No</th>
+                            <th class="p-3 border border-gray-400 text-left min-w-[200px]">Nama Guru & NIP</th>
+                            <th class="p-3 border border-gray-400 text-left min-w-[170px]">Mata Pelajaran & Kelas</th>
+                            <th class="p-3 border border-gray-400 min-w-[130px]">Perencanaan PM<br><span class="text-xs font-normal text-blue-200">(Max 108)</span></th>
+                            <th class="p-3 border border-gray-400 min-w-[130px]">Implementasi PM<br><span class="text-xs font-normal text-blue-200">(Max 128)</span></th>
+                            <th class="p-3 border border-gray-400 min-w-[160px]">Total Skor PM & Predikat<br><span class="text-xs font-normal text-blue-200">(Max 236)</span></th>
+                            <th class="p-3 border border-gray-400 min-w-[280px] text-left">Intisari Catatan Umpan Balik</th>
+                            <th class="p-3 border border-gray-400 min-w-[160px] no-print">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="db-pasca-umpan-balik-body">
+                        <tr>
+                            <td colspan="8" class="p-6 text-center text-gray-500">Memuat basis data pasca umpan balik...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Kesimpulan -->
+        <section id="kesimpulan" class="content-section hidden-section">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-2xl font-bold text-gray-700">Rekapitulasi Kesimpulan Supervisi</h2>
+                
+                <!-- Group Tombol Aksi (Excel & PDF) -->
+                <div class="flex items-center gap-3 no-print">
+                    <!-- Tombol Download Excel -->
+                    <button onclick="downloadExcel('kesimpulan-table', 'Rekapitulasi_Kesimpulan_Supervisi')" class="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-4 rounded-lg shadow transition">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        <span>Download Excel</span>
+                    </button>
+
+                    <!-- Tombol Download PDF -->
+                    <button onclick="downloadPDF('kesimpulan', 'Kesimpulan_Supervisi')" class="flex items-center gap-2 bg-purple-700 hover:bg-purple-800 text-white font-semibold py-2 px-4 rounded-lg shadow transition">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        <span>Download PDF</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-lg shadow overflow-x-auto">
+                <div class="flex justify-between items-center mb-4 no-print">
+                    <span class="text-xl text-gray-500">Data rekapitulasi seluruh guru yang disupervisi</span>
+                    <button onclick="loadKesimpulan()" class="bg-gray-800 text-white px-4 py-2 rounded shadow text-xl hover:bg-gray-700">🔄 Refresh Data</button>
+                </div>
+                
+                <table id="kesimpulan-table" class="w-full text-xl text-left border-collapse border border-gray-300">
+                    <thead>
+                        <tr class="bg-blue-900 text-white text-center font-bold">
+                            <th rowspan="3" class="p-2 border border-gray-400">No.</th>
+                            <th rowspan="3" class="p-2 border border-gray-400">Nama Guru</th>
+                            <th rowspan="3" class="p-2 border border-gray-400">NIP</th>
+                            <th rowspan="3" class="p-2 border border-gray-400">Kelas / Semester</th>
+                            <th colspan="9" class="p-2 border border-gray-400">PRA OBSERVASI</th>
+                            <th colspan="3" class="p-2 border border-gray-400">OBSERVASI</th>
+                            <th colspan="3" class="p-2 border border-gray-400">PASCA OBSERVASI</th>
+                            <th rowspan="3" class="p-2 border border-gray-400 min-w-[250px]">Kesimpulan (Otomatis)</th>
+                        </tr>
+                        <tr class="bg-blue-800 text-white text-center font-bold">
+                            <th colspan="3" class="p-2 border border-gray-400">Administrasi</th>
+                            <th colspan="3" class="p-2 border border-gray-400">Penelaah ATP</th>
+                            <th colspan="3" class="p-2 border border-gray-400">Penelaah Modul Ajar</th>
+                            <th colspan="3" class="p-2 border border-gray-400">Observasi Pembelajaran</th>
+                            <th rowspan="2" class="p-2 border border-gray-400">Refleksi</th>
+                            <th rowspan="2" class="p-2 border border-gray-400">Umpan Balik</th>
+                            <th rowspan="2" class="p-2 border border-gray-400">Tindak Lanjut</th>
+                        </tr>
+                        <tr class="bg-blue-700 text-white text-center font-semibold">
+                            <th class="p-1 border border-gray-400">Skor</th>
+                            <th class="p-1 border border-gray-400">%</th>
+                            <th class="p-1 border border-gray-400">Predikat</th>
+                            <th class="p-1 border border-gray-400">Skor</th>
+                            <th class="p-1 border border-gray-400">%</th>
+                            <th class="p-1 border border-gray-400">Predikat</th>
+                            <th class="p-1 border border-gray-400">Skor</th>
+                            <th class="p-1 border border-gray-400">%</th>
+                            <th class="p-1 border border-gray-400">Predikat</th>
+                            <th class="p-1 border border-gray-400">Skor</th>
+                            <th class="p-1 border border-gray-400">%</th>
+                            <th class="p-1 border border-gray-400">Predikat</th>
+                        </tr>
+                    </thead>
+                    <tbody id="kesimpulan-table-body">
+                        <tr>
+                            <td colspan="20" class="p-4 text-center text-gray-400">Memuat data kesimpulan...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Footer Fixed di Bawah Layar -->
+        <footer class="fixed bottom-0 left-0 z-50 w-full bg-blue-900 border-t border-gray-200 p-3 text-center text-xl text-white shadow-md no-print md:pl-64">
+            © 2026. Basuki, S.Kom. Pengawas TK/SD Kec. Perhentian Raja
+        </footer>
+    </main>
+
+    <script>
+        // ===== MODAL SYSTEM =====
+        function showModal(message, title, type) {
+            title = title || 'Perhatian';
+            type = type || 'warning';
+            
+            var icons = { success: '✅', warning: '⚠️', danger: '❌', info: 'ℹ️' };
+            var overlay = document.getElementById('modal-overlay');
+            var icon = document.getElementById('modal-icon');
+            var titleEl = document.getElementById('modal-title');
+            var msgEl = document.getElementById('modal-message');
+            var btn = document.getElementById('modal-btn');
+            
+            icon.textContent = icons[type] || '⚠️';
+            titleEl.textContent = title;
+            msgEl.textContent = message;
+            btn.textContent = 'Tutup';
+            
+            overlay.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center modal-' + type;
+        }
+
+        function showModalConfirm(message, title, onConfirm) {
+            title = title || 'Konfirmasi';
+            
+            var overlay = document.getElementById('modal-overlay');
+            var icon = document.getElementById('modal-icon');
+            var titleEl = document.getElementById('modal-title');
+            var msgEl = document.getElementById('modal-message');
+            var btn = document.getElementById('modal-btn');
+            
+            icon.textContent = '❓';
+            titleEl.textContent = title;
+            msgEl.textContent = message;
+            btn.textContent = 'Ya, Lanjutkan';
+            btn.className = 'bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 font-semibold text-xl mr-2 transition';
+            btn.onclick = function() {
+                closeModal();
+                if (onConfirm) onConfirm();
+            };
+            
+            overlay.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center modal-danger';
+            
+            var btnWrap = btn.parentElement;
+            var existingCancel = document.getElementById('modal-cancel-btn');
+            if (!existingCancel) {
+                var cancelBtn = document.createElement('button');
+                cancelBtn.id = 'modal-cancel-btn';
+                cancelBtn.textContent = 'Batal';
+                cancelBtn.className = 'bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 font-semibold text-xl transition';
+                cancelBtn.onclick = closeModal;
+                btnWrap.insertBefore(cancelBtn, btn);
+            }
+        }
+
+        function closeModal() {
+            var overlay = document.getElementById('modal-overlay');
+            overlay.className = 'hidden';
+            
+            var btn = document.getElementById('modal-btn');
+            btn.textContent = 'Tutup';
+            btn.className = 'bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-semibold text-xl transition';
+            btn.onclick = closeModal;
+            
+            var cancelBtn = document.getElementById('modal-cancel-btn');
+            if (cancelBtn) cancelBtn.remove();
+        }
+
+        // ===== DATA STATE & MENU CONTROLLER =====
+        var activeGuruId = null;
+
+        // FUNGSI UNTUK MENGAKTIFKAN MENU SETELAH IDENTITAS DISIMPAN
+        function unlockMenus() {
+            var restrictedButtons = document.querySelectorAll('.restricted-menu');
+            restrictedButtons.forEach(function(btn) {
+                btn.classList.remove('menu-disabled');
+            });
+        }
+
+        // ===== INSTRUMEN DATA =====
+        var instrumenData = {
+            'administrasi': {
+                id: 'sup-admin',
+                title: 'Supervisi Administrasi Pembelajaran',
+                maxScore: 36,
+                options: [{v:0, l:'Tidak Ada (0)'},{v:1, l:'Ada Tidak Sesuai (1)'},{v:2, l:'Ada Sesuai (2)'}],
+                items: [
+                    "Kalender Pendidikan", "Rincian Minggu Efektif", "Program Tahunan", "Program Semester",
+                    "Analisis Capaian Pembelajaran", "Alur Tujuan Pembelajaran", "Modul Ajar", "KKTP",
+                    "Bank Soal/Rubrik", "Jadwal Tatap Muka", "Agenda Mengajar", "Daftar Nilai",
+                    "Absensi Siswa", "Jurnal Mengajar", "Media Pembelajaran", "Buku Pegangan Guru", "Buku Teks Siswa",
+                    "Buku Pembimbingan Murid"
+                ]
+            },
+            'atp': {
+                id: 'sup-atp',
+                title: 'Penelaahan Alur Tujuan Pembelajaran (ATP)',
+                maxScore: 24,
+                options: [{v:0, l:'Tidak Ada (0)'}, {v:1, l:'Tidak Sesuai (1)'}, {v:2, l:'Ya Sesuai (2)'}],
+                items: [
+                    "Identitas ATP", "Peta Kompetensi", "Capaian Pembelajaran", "Tujuan Pembelajaran",
+                    "ATP mencakup komponen kompetensi", "ATP mencakup komponen konten", "ATP mencakup komponen variasi",
+                    "Menggambarkan urutan pengembangan kompetensi", "Tahapan pembelajaran yang linear",
+                    "Menggambarkan tahapan perkembangan antarfase", "Identifikasi elemen Profil Pelajar Pancasila", "Alur Tujuan Pembelajaran Lengkap"
+                ]
+            },
+            'modul_ajar': {
+                id: 'sup-modul',
+                title: 'Penelaahan Modul Ajar',
+                maxScore: 48,
+                options: [{v:0, l:'Tidak Ada (0)'}, {v:1, l:'Kurang Lengkap (1)'}, {v:2, l:'Sudah Lengkap (2)'}],
+                items: [
+                    "Identitas (Nama penyusun, institusi, tahun, kelas, waktu)", "Kompetensi Awal", "Dimensi Profil Pelajar Pancasila",
+                    "Kesesuaian dan ketepatan fasilitas (Sarpras)", "Kesesuaian materi dan sumber bahan ajar", "Target Peserta Didik",
+                    "Model pembelajaran tatap muka/blended", "Ketepatan Tujuan Pembelajaran", "Pemahaman Bermakna", "Pertanyaan Pemantik",
+                    "Persiapan Pembelajaran", "Pendahuluan: Motivasi dan Apersepsi", "Inti: Mengamati, mendengar, menyimak",
+                    "Inti: Merumuskan masalah (bertanya)", "Inti: Eksplorasi/Mengumpulkan informasi", "Inti: Menyimpulkan/Mensintesa",
+                    "Inti: Mengomunikasikan", "Penutup: Merangkum", "Penutup: Merefleksi", "Penutup: Umpan balik",
+                    "Penilaian: Bentuk, teknik dan instrumen", "Penilaian Sikap", "Penilaian Pengetahuan", "Penilaian Keterampilan"
+                ]
+            },
+            'observasi': {
+                id: 'observasi',
+                title: 'Observasi Pelaksanaan Pembelajaran',
+                maxScore: 76,
+                options: [{v:0, l:'Tidak/Kurang (0)'}, {v:1, l:'Cukup/Sebagian (1)'}, {v:2, l:'Ya/Sesuai (2)'}],
+                items: [
+                    "Menyiapkan fisik dan psikis peserta didik", "Menyampaikan rencana kegiatan", "Mengajukan pertanyaan menantang",
+                    "Menyampaikan manfaat materi", "Menyampaikan kompetensi", "Mengaitkan materi sebelumnya", "Mendemonstrasikan materi",
+                    "Menyesuaikan materi dengan tujuan", "Mengkaitkan materi dengan Iptek/kehidupan", "Menyajikan pembahasan dengan tepat",
+                    "Menyajikan sistematis", "Pembelajaran sesuai kompetensi", "Menumbuhkan partisipasi bertanya", "Menumbuhkan partisipasi berpendapat",
+                    "Mengembangkan keterampilan", "Pembelajaran kontekstual", "Sesuai alokasi waktu", "Mengasah Creativity",
+                    "Mengasah Critical Thinking", "Mengasah Communication", "Mengasah Collaboration", "Suasana kelas kondusif",
+                    "Disiplin positif", "Penggunaan sumber belajar bervariasi", "Penggunaan media pembelajaran", "Melibatkan peserta didik pemanfaatan sumber",
+                    "Melibatkan peserta didik pemanfaatan media", "Kesan menarik", "Bahasa lisan jelas", "Bahasa tulis baik",
+                    "Membimbing merangkum materi", "Aktivitas meningkatkan keterampilan mengajar", "Merefleksikan praktik pengajaran",
+                    "Penerapan cara/pendekatan baru", "Arahan kegiatan/tugas", "Penilaian Sikap", "Penilaian Pengetahuan", "Penilaian Keterampilan"
+                ]
+            },
+            'perencanaan_pm': {
+                id: 'perencanaan-pm',
+                title: 'Instrumen Umpan Balik Perencanaan Pembelajaran Mendalam',
+                maxScore: 108,
+                options: [{v:0, l:'0'}, {v:1, l:'1'}, {v:2, l:'2'}, {v:3, l:'3'}, {v:4, l:'4'}],
+                items: [
+                    { number: 1, category: 'Keselarasan', text: 'Tujuan pembelajaran, langkah pembelajaran, dan asesmen pembelajaran sudah mengarah pada pencapaian Dimensi Profil Lulusan' },
+                    { number: 2, category: 'Keselarasan', text: 'Tujuan pembelajaran, langkah pembelajaran, dan asesmen pembelajaran sudah selaras' },
+                    { number: 3, category: 'Kerangka Pembelajaran', text: 'Praktik pedagogis yang dituliskan sudah tergambar pada langkah pembelajaran dan/atau asesmen pembelajaran' },
+                    { number: 4, category: 'Kerangka Pembelajaran', text: 'Lingkungan belajar yang dituliskan sudah tergambar pada langkah pembelajaran dan/atau asesmen pembelajaran' },
+                    { number: 5, category: 'Kerangka Pembelajaran', text: 'Kemitraan pembelajaran yang dituliskan sudah tergambar pada langkah pembelajaran dan/atau asesmen pembelajaran' },
+                    { number: 6, category: 'Kerangka Pembelajaran', text: 'Pemanfaatan digital yang dituliskan sudah tergambar pada langkah pembelajaran dan/atau asesmen pembelajaran' },
+                    { number: 7, category: 'Langkah Pembelajaran', isHeader: true, text: 'Langkah pembelajaran dapat memfasilitasi murid untuk merasakan pengalaman belajar MEMAHAMI (terlibat aktif mengonstruksi pengetahuan agar dapat memahami secara mendalam konsep atau materi dari berbagai sumber dan konteks):' },
+                    { parentNumber: 7, isSubItem: true, subCode: 'a', category: 'Langkah Pembelajaran', text: 'Menghubungkan pengetahuan baru dengan pengetahuan sebelumnya' },
+                    { parentNumber: 7, isSubItem: true, subCode: 'b', category: 'Langkah Pembelajaran', text: 'Menstimulasi proses berpikir murid' },
+                    { parentNumber: 7, isSubItem: true, subCode: 'c', category: 'Langkah Pembelajaran', text: 'Menghubungkan dengan konteks nyata dan/atau kehidupan sehari-hari' },
+                    { parentNumber: 7, isSubItem: true, subCode: 'd', category: 'Langkah Pembelajaran', text: 'Memberikan kebebasan eksploratif dan kolaboratif' },
+                    { parentNumber: 7, isSubItem: true, subCode: 'e', category: 'Langkah Pembelajaran', text: 'Menanamkan nilai-nilai moral dan etika dan nilai positif lainnya' },
+                    { parentNumber: 7, isSubItem: true, subCode: 'f', category: 'Langkah Pembelajaran', text: 'Mengaitkan pembelajaran dengan pembentukan karakter murid' },
+                    { number: 8, category: 'Langkah Pembelajaran', isHeader: true, text: 'Langkah pembelajaran dapat memfasilitasi murid untuk merasakan pengalaman belajar MENGAPLIKASI (mengaplikasi pemahaman secara kontekstual dalam kehidupan nyata sebagai bagian dari pendalaman pengetahuan):' },
+                    { parentNumber: 8, isSubItem: true, subCode: 'a', category: 'Langkah Pembelajaran', text: 'Menghubungkan konsep baru dengan pengetahuan sebelumnya' },
+                    { parentNumber: 8, isSubItem: true, subCode: 'b', category: 'Langkah Pembelajaran', text: 'Menerapkan pengetahuan ke dalam situasi nyata atau bidang lain' },
+                    { parentNumber: 8, isSubItem: true, subCode: 'c', category: 'Langkah Pembelajaran', text: 'Mengembangkan pemahaman dengan eksplorasi lebih lanjut' },
+                    { parentNumber: 8, isSubItem: true, subCode: 'd', category: 'Langkah Pembelajaran', text: 'Berpikir Kritis dan mencari solusi inovatif berdasarkan pengetahuan yang ada' },
+                    { number: 9, category: 'Langkah Pembelajaran', isHeader: true, text: 'Langkah pembelajaran dapat memfasilitasi murid untuk merasakan pengalaman belajar MEREFLEKSI (mengevaluasi dan memaknai proses serta hasil dari tindakan atau praktik nyata yang telah mereka lakukan dan menentukan tindaklanjut ke depan; serta mengelola proses belajarnya secara mandiri):' },
+                    { parentNumber: 9, isSubItem: true, subCode: 'a', category: 'Langkah Pembelajaran', text: 'Memotivasi diri sendiri untuk terus belajar bagaimana cara belajar' },
+                    { parentNumber: 9, isSubItem: true, subCode: 'b', category: 'Langkah Pembelajaran', text: 'Refleksi terhadap pencapaian tujuan pembelajaran (evaluasi diri)' },
+                    { parentNumber: 9, isSubItem: true, subCode: 'c', category: 'Langkah Pembelajaran', text: 'Menerapkan strategi berpikir' },
+                    { parentNumber: 9, isSubItem: true, subCode: 'd', category: 'Langkah Pembelajaran', text: 'Memiliki kemampuan metakognisi (meregulasi diri dalam pembelajaran)' },
+                    { parentNumber: 9, isSubItem: true, subCode: 'e', category: 'Langkah Pembelajaran', text: 'Meregulasi emosi dalam pembelajaran' },
+                    { number: 10, category: 'Langkah Pembelajaran', text: 'Langkah perencanaan pembelajaran dapat memfasilitasi tindakan saling MEMULIAKAN antara Guru-Murid, Murid-Guru, Murid-Murid yang tercermin dalam bahasa verbal dan nonverbal' },
+                    { number: 11, category: 'Langkah Pembelajaran', text: 'Prinsip pembelajaran mendalam berupa berkesadaran, bermakna, dan/atau menggembirakan sudah tergambar pada setiap pengalaman belajar di langkah pembelajaran' },
+                    { number: 12, category: 'Langkah Pembelajaran', text: 'Perencanaan pembelajaran sudah mengakomodir pengalaman belajar yang sesuai dengan karakteristik peserta didik' },
+                    { number: 13, category: 'Asesmen', text: 'Asesmen pada awal pembelajaran telah dilaksanakan untuk mendapatkan bukti kesiapan belajar secara emosional dan mental, pengetahuan awal, dan kebutuhan belajar murid' },
+                    { number: 14, category: 'Asesmen', text: 'Asesmen selama Proses Pembelajaran telah dilaksanakan sesuai perencanaan untuk memantau perkembangan belajar murid, memberikan umpan balik untuk perbaikan kontinyu (baik dari guru ke murid, maupun dari murid ke guru), melalui beragam teknik' },
+                    { number: 15, category: 'Asesmen', text: 'Asesmen hasil Pembelajaran direncanakan untuk mengukur pencapaian kompetensi sebagai bukti keberhasilan pembelajaran dengan beragam cara, antara lain: tes, portofolio, proyek, presentasi, dsb.' }
+                ]
+            },
+            'implementasi_pm': {
+                id: 'implementasi-pm',
+                title: 'Instrumen Implementasi dan Refleksi Perencanaan Pembelajaran',
+                maxScore: 128,
+                options: [{v:0, l:'0'}, {v:1, l:'1'}, {v:2, l:'2'}, {v:3, l:'3'}, {v:4, l:'4'}],
+                items: [
+                    { number: 1, category: 'Keselarasan', isHeader: true, text: 'Tindakan implementasi perencanaan selaras dengan perencanaan pembelajaran pada:' },
+                    { parentNumber: 1, isSubItem: true, subCode: 'a', category: 'Keselarasan', text: 'Awal pembelajaran' },
+                    { parentNumber: 1, isSubItem: true, subCode: 'b', category: 'Keselarasan', text: 'Inti pembelajaran dalam proses memahami, mengaplikasi, dan merefleksi' },
+                    { parentNumber: 1, isSubItem: true, subCode: 'c', category: 'Keselarasan', text: 'Penutupan pembelajaran' },
+                    { number: 2, category: 'Keselarasan', isHeader: true, text: 'Upaya mencapai tujuan pembelajaran menuju pencapaian dimensi profil lulusan:' },
+                    { parentNumber: 2, isSubItem: true, subCode: 'a', category: 'Keselarasan', text: 'Upaya mencapai tujuan pembelajaran menuju pencapaian dimensi profil lulusan selaras dengan perencanaan pembelajaran' },
+                    { parentNumber: 2, isSubItem: true, subCode: 'b', category: 'Keselarasan', text: 'Upaya mencapai tujuan pembelajaran menuju pencapaian dimensi profil lulusan disesuaikan dengan konteks kebutuhan belajar siswa' },
+                    { number: 3, category: 'Implementasi Kerangka Pembelajaran', isHeader: true, text: 'Strategi pembelajaran yang diimplementasikan untuk mencapai tujuan pembelajaran:' },
+                    { parentNumber: 3, isSubItem: true, subCode: 'a', category: 'Implementasi Kerangka Pembelajaran', text: 'Strategi pembelajaran yang diimplementasikan untuk mencapai tujuan sudah sesuai dengan perencanaan' },
+                    { parentNumber: 3, isSubItem: true, subCode: 'b', category: 'Implementasi Kerangka Pembelajaran', text: 'Strategi pembelajaran yang diimplementasikan untuk mencapai tujuan dimodifikasi agar sesuai dengan kebutuhan belajar dalam situasi kondisi yang ada' },
+                    { parentNumber: 3, isSubItem: true, subCode: 'c', category: 'Implementasi Kerangka Pembelajaran', text: 'Tantangan yang dihadapi dalam menggunakan strategi terlewati untuk memfasilitasi tercapainya Capaian Pembelajaran (CP)' },
+                    { number: 4, category: 'Implementasi Kerangka Pembelajaran', text: 'Lingkungan belajar yang diimplementasikan sudah tergambar pada langkah pembelajaran dan/atau asesmen pembelajaran' },
+                    { number: 5, category: 'Implementasi Kerangka Pembelajaran', text: 'Kemitraan pembelajaran yang diimplementasikan sudah tergambar pada langkah pembelajaran dan/atau asesmen pembelajaran' },
+                    { number: 6, category: 'Implementasi Kerangka Pembelajaran', text: 'Pemanfaatan digital yang diimplementasikan sudah tergambar pada langkah pembelajaran dan/atau asesmen pembelajaran' },
+                    { number: 7, category: 'Langkah Pembelajaran', text: 'Langkah pembelajaran yang dilakukan sesuai perencanaan dapat memfasilitasi tindakan saling MEMULIAKAN antara Guru-Murid, Murid-Guru, Murid-Murid yang tercermin dalam bahasa verbal dan nonverbal' },
+                    { number: 8, category: 'Langkah Pembelajaran', isHeader: true, text: 'Langkah pembelajaran sudah memfasilitasi murid untuk merasakan pengalaman belajar MEMAHAMI (terlibat aktif mengonstruksi pengetahuan agar dapat memahami secara mendalam konsep atau materi dari berbagai sumber dan konteks):' },
+                    { parentNumber: 8, isSubItem: true, subCode: 'a', category: 'Langkah Pembelajaran', text: 'Menghubungkan pengetahuan baru dengan pengetahuan sebelumnya' },
+                    { parentNumber: 8, isSubItem: true, subCode: 'b', category: 'Langkah Pembelajaran', text: 'Menstimulasi proses berpikir peserta didik' },
+                    { parentNumber: 8, isSubItem: true, subCode: 'c', category: 'Langkah Pembelajaran', text: 'Menghubungkan dengan konteks nyata dan/atau kehidupan sehari-hari' },
+                    { parentNumber: 8, isSubItem: true, subCode: 'd', category: 'Langkah Pembelajaran', text: 'Memberikan kebebasan eksploratif dan kolaboratif' },
+                    { parentNumber: 8, isSubItem: true, subCode: 'e', category: 'Langkah Pembelajaran', text: 'Menanamkan nilai-nilai moral dan etika dan nilai positif lainnya' },
+                    { parentNumber: 8, isSubItem: true, subCode: 'f', category: 'Langkah Pembelajaran', text: 'Mengaitkan pembelajaran dengan pembentukan karakter peserta didik' },
+                    { number: 9, category: 'Langkah Pembelajaran', isHeader: true, text: 'Langkah pembelajaran sudah memfasilitasi murid untuk merasakan pengalaman belajar MENGAPLIKASI (mengaplikasi pemahaman secara kontekstual dalam kehidupan nyata sebagai bagian dari pendalaman pengetahuan):' },
+                    { parentNumber: 9, isSubItem: true, subCode: 'a', category: 'Langkah Pembelajaran', text: 'Menghubungkan konsep baru dengan pengetahuan sebelumnya' },
+                    { parentNumber: 9, isSubItem: true, subCode: 'b', category: 'Langkah Pembelajaran', text: 'Menerapkan pengetahuan ke dalam situasi nyata atau bidang lain' },
+                    { parentNumber: 9, isSubItem: true, subCode: 'c', category: 'Langkah Pembelajaran', text: 'Mengembangkan pemahaman dengan eksplorasi lebih lanjut' },
+                    { parentNumber: 9, isSubItem: true, subCode: 'd', category: 'Langkah Pembelajaran', text: 'Berpikir Kritis dan mencari solusi inovatif berdasarkan pengetahuan yang ada' },
+                    { number: 10, category: 'Langkah Pembelajaran', isHeader: true, text: 'Langkah pembelajaran sudah memfasilitasi murid untuk merasakan pengalaman belajar MEREFLEKSI (mengevaluasi dan memaknai proses serta hasil dari tindakan atau praktik nyata yang telah mereka lakukan dan menentukan tindaklanjut ke depan; serta mengelola proses belajarnya secara mandiri):' },
+                    { parentNumber: 10, isSubItem: true, subCode: 'a', category: 'Langkah Pembelajaran', text: 'Memotivasi diri sendiri untuk terus belajar bagaimana cara belajar' },
+                    { parentNumber: 10, isSubItem: true, subCode: 'b', category: 'Langkah Pembelajaran', text: 'Refleksi terhadap pencapaian tujuan pembelajaran (evaluasi diri)' },
+                    { parentNumber: 10, isSubItem: true, subCode: 'c', category: 'Langkah Pembelajaran', text: 'Menerapkan strategi berpikir' },
+                    { parentNumber: 10, isSubItem: true, subCode: 'd', category: 'Langkah Pembelajaran', text: 'Memiliki kemampuan metakognisi (meregulasi diri dalam pembelajaran)' },
+                    { parentNumber: 10, isSubItem: true, subCode: 'e', category: 'Langkah Pembelajaran', text: 'Meregulasi emosi dalam pembelajaran' },
+                    { number: 11, category: 'Langkah Pembelajaran', text: 'Prinsip pembelajaran mendalam berupa berkesadaran, bermakna, dan/atau menggembirakan sudah tergambar pada setiap pengalaman belajar di langkah pembelajaran yang diimplementasikan.' },
+                    { number: 12, category: 'Langkah Pembelajaran', text: 'Praktik pembelajaran sudah mengakomodir pengalaman belajar yang sesuai dengan karakteristik peserta didik (umur, tingkat perkembangan, kemampuan, bakat dan minat, gaya belajar, dll.)' },
+                    { number: 13, category: 'Asesmen', text: 'Asesmen pada awal pembelajaran telah dilaksanakan untuk mendapatkan bukti kesiapan belajar secara emosional dan mental, pengetahuan awal, dan kebutuhan belajar murid' },
+                    { number: 14, category: 'Asesmen', text: 'Asesmen selama Proses Pembelajaran telah dilaksanakan sesuai perencanaan untuk memantau perkembangan belajar murid, memberikan umpan balik untuk perbaikan kontinyu (baik dari guru ke murid, maupun dari murid ke guru), melalui beragam teknik' },
+                    { number: 15, category: 'Asesmen', text: 'Asesmen hasil Pembelajaran direncanakan untuk mengukur pencapaian kompetensi sebagai bukti keberhasilan pembelajaran dengan beragam cara, antara lain: tes, portofolio, proyek, presentasi, dsb.' }
+                ]
+            }
+        };
+
+        // ===== NAVIGATION =====
+        function nav(sectionId, btn) {
+            if (btn && btn.classList.contains('menu-disabled')) return;
+
+            document.querySelectorAll('.content-section').forEach(function(el) { el.classList.add('hidden-section'); });
+            document.getElementById(sectionId).classList.remove('hidden-section');
+            
+            document.querySelectorAll('.menu-btn').forEach(function(el) { el.classList.remove('menu-active'); });
+            if (btn) btn.classList.add('menu-active');
+
+            if (sectionId === 'kesimpulan') {
+                loadKesimpulan();
+            } else if (sectionId === 'dashboard') {
+                loadDashboard();
+            } else if (sectionId === 'hasil-umpan-balik') {
+                renderHasilUmpanBalik();
+            } else if (sectionId === 'db-pasca-umpan-balik') {
+                loadDbPascaUmpanBalik();
+            }
+        }
+
+        // ===== SUBMENU TOGGLE =====
+        function toggleSubmenu(subId, btn) {
+            if (btn && btn.classList.contains('menu-disabled')) return;
+
+            var submenu = document.getElementById(subId);
+            var arrow = document.getElementById('arrow-' + subId);
+            submenu.classList.toggle('open');
+            arrow.classList.toggle('rotated');
+        }
+
+        // ===== MAPPING & LOGIKA PENILAIAN SELANJUTNYA =====
+        var nextInstrumenMap = {
+            'administrasi': {
+                targetSection: 'sup-atp',
+                nextTitle: 'Penelaahan ATP',
+                label: 'Lanjut ke Penelaahan ATP ➔',
+                parentSubmenu: 'pra-sub'
+            },
+            'atp': {
+                targetSection: 'sup-modul',
+                nextTitle: 'Penelaahan Modul Ajar',
+                label: 'Lanjut ke Penelaahan Modul Ajar ➔',
+                parentSubmenu: 'pra-sub'
+            },
+            'modul_ajar': {
+                targetSection: 'observasi',
+                nextTitle: 'Observasi Pelaksanaan Pembelajaran',
+                label: 'Lanjut ke Observasi Pembelajaran ➔',
+                parentSubmenu: null
+            },
+            'observasi': {
+                targetSection: 'refleksi',
+                nextTitle: 'Refleksi Pasca Observasi',
+                label: 'Lanjut ke Refleksi Pasca Observasi ➔',
+                parentSubmenu: 'pasca-sub'
+            },
+            'perencanaan_pm': {
+                targetSection: 'implementasi-pm',
+                nextTitle: 'Implementasi & Refleksi PM',
+                label: 'Lanjut ke Implementasi & Refleksi PM ➔',
+                parentSubmenu: 'umpan-balik-pm-sub'
+            },
+            'implementasi_pm': {
+                targetSection: 'hasil-umpan-balik',
+                nextTitle: 'Hasil Umpan Balik PM',
+                label: 'Lanjut ke Hasil Umpan Balik PM ➔',
+                parentSubmenu: 'umpan-balik-pm-sub'
+            }
+        };
+
+        function goToNextInstrumen(key) {
+            var nextInfo = nextInstrumenMap[key];
+            if (!nextInfo) return;
+
+            // Buka submenu jika target berada di dalam submenu
+            if (nextInfo.parentSubmenu) {
+                var sub = document.getElementById(nextInfo.parentSubmenu);
+                var arrow = document.getElementById('arrow-' + nextInfo.parentSubmenu);
+                if (sub && !sub.classList.contains('open')) {
+                    sub.classList.add('open');
+                    if (arrow) arrow.classList.add('rotated');
+                }
+            }
+
+            // Temukan tombol sidebar yang tepat untuk diberikan state active
+            var targetBtn = document.querySelector('[onclick*="' + nextInfo.targetSection + '"]');
+            nav(nextInfo.targetSection, targetBtn);
+
+            // Scroll halaman utama ke atas dengan halus
+            var mainEl = document.querySelector('main');
+            if (mainEl) {
+                mainEl.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }
+
+        function enableNextButton(key) {
+            var btn = document.getElementById('next-btn-' + key);
+            if (!btn) return;
+            btn.disabled = false;
+            btn.classList.remove('btn-next-disabled');
+            btn.classList.add('btn-next-active');
+            btn.title = "Klik untuk lanjut ke penilaian berikutnya";
+        }
+
+        function disableNextButton(key) {
+            var btn = document.getElementById('next-btn-' + key);
+            if (!btn) return;
+            btn.disabled = true;
+            btn.classList.remove('btn-next-active');
+            btn.classList.add('btn-next-disabled');
+            btn.title = "Simpan penilaian terlebih dahulu untuk mengaktifkan tombol ini";
+        }
+
+        // ===== GENERATE FORMS =====
+        function generateForm(key) {
+            const data = instrumenData[key];
+            const section = document.getElementById(data.id);
+            
+            const isThreeOptionMode = (key === 'administrasi' || key === 'atp' || key === 'modul_ajar' || key === 'observasi');
+            
+            let itemsHtml = data.items.map((item, index) => {
+                let isHeader = (typeof item === 'object' && item.isHeader);
+                let isSubItem = (typeof item === 'object' && item.isSubItem);
+                let itemText = typeof item === 'object' ? item.text : item;
+                let formattedText = itemText.replace(/\n/g, '<br>');
+
+                if (isHeader) {
+                    let itemCategoryBadge = (typeof item === 'object' && item.category) 
+                        ? '<span class="inline-block bg-blue-100 text-blue-800 text-xs font-bold px-2 py-0.5 rounded tracking-wide mr-2 border border-blue-200">[' + item.category + ']</span>' 
+                        : '';
+                    return '<tr class="border-b bg-blue-50/60">' +
+                        '<td class="p-3 text-center font-black text-base text-blue-900 align-middle w-12">' + item.number + '</td>' +
+                        '<td class="p-3 text-base align-middle text-gray-900 font-bold">' + 
+                            '<div class="mb-1">' + itemCategoryBadge + '</div>' +
+                            '<div class="leading-relaxed">' + formattedText + '</div>' +
+                        '</td>' +
+                        '<td class="p-3 align-middle text-center text-xs text-gray-500 italic bg-blue-50/30" colspan="2">' +
+                            '<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-100/70 text-blue-800 font-semibold">' +
+                                '<span>ℹ️</span><span>Judul Aspek / Penjabaran (Pemberian skor pada butir di bawahnya)</span>' +
+                            '</span>' +
+                        '</td>' +
+                    '</tr>';
+                }
+
+                let radioHtml = data.options.map(opt => {
+                    if (isThreeOptionMode) {
+                        let cleanText = opt.l.replace(/\s*\(\d+\)/, '');
+                        return '<label class="flex items-center justify-center gap-1.5 cursor-pointer bg-white hover:bg-blue-50 py-2 px-2 rounded-lg border border-gray-300 transition text-xs font-semibold whitespace-nowrap shadow-sm hover:border-blue-400 has-[:checked]:bg-blue-600 has-[:checked]:text-white has-[:checked]:border-blue-600 has-[:checked]:shadow group select-none">' +
+                            '<input type="radio" name="ans-' + key + '-' + index + '" value="' + opt.v + '" class="ans-' + key + ' text-blue-600 focus:ring-blue-500 w-3.5 h-3.5 cursor-pointer" data-idx="' + index + '" onchange="calcScore(\'' + key + '\', ' + index + ')">' +
+                            '<span class="inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-black bg-blue-100 text-blue-800 group-has-[:checked]:bg-white group-has-[:checked]:text-blue-700 flex-shrink-0">' + opt.v + '</span>' +
+                            '<span class="truncate text-[12px] text-gray-700 group-has-[:checked]:text-white group-has-[:checked]:font-bold">' + cleanText + '</span>' +
+                        '</label>';
+                    } else {
+                        // Perencanaan PM & Implementasi PM (0, 1, 2, 3, 4)
+                        return '<label class="flex items-center justify-center gap-1 cursor-pointer bg-white hover:bg-blue-50 py-2 px-2 rounded-lg border border-gray-300 transition text-sm font-bold text-gray-700 shadow-sm hover:border-blue-400 has-[:checked]:bg-blue-600 has-[:checked]:text-white has-[:checked]:border-blue-600 has-[:checked]:shadow group select-none">' +
+                            '<input type="radio" name="ans-' + key + '-' + index + '" value="' + opt.v + '" class="ans-' + key + ' text-blue-600 focus:ring-blue-500 w-3.5 h-3.5 cursor-pointer" data-idx="' + index + '" onchange="calcScore(\'' + key + '\', ' + index + ')">' +
+                            '<span class="font-black text-sm">' + opt.v + '</span>' +
+                        '</label>';
+                    }
+                }).join('');
+
+                let optionContainerHtml = isThreeOptionMode
+                    ? '<div class="grid grid-cols-3 gap-2 w-full">' + radioHtml + '</div>'
+                    : '<div class="grid grid-cols-5 gap-1.5 w-full">' + radioHtml + '</div>';
+
+                let cellWidthClass = isThreeOptionMode ? 'w-[480px] min-w-[380px]' : 'w-72 min-w-[240px]';
+
+                if (isSubItem) {
+                    return '<tr class="border-b hover:bg-gray-50 bg-white transition duration-150">' +
+                        '<td class="p-3 text-center font-bold text-sm text-blue-700 align-middle w-12">' + item.subCode + '.</td>' +
+                        '<td class="p-3 text-sm align-middle text-gray-700">' +
+                            '<div class="pl-4 border-l-2 border-blue-400 leading-relaxed font-medium">' +
+                                '<span class="font-bold text-blue-800 mr-1.5">' + item.subCode + '.</span>' + formattedText +
+                            '</div>' +
+                        '</td>' +
+                        '<td class="p-3 align-middle ' + cellWidthClass + '">' + optionContainerHtml + '</td>' +
+                        '<td class="p-3 text-center align-middle w-16"><span id="nilai-' + key + '-' + index + '" class="inline-block bg-gray-200 text-gray-600 font-bold rounded-full w-8 h-8 leading-8 text-center text-base">0</span></td>' +
+                    '</tr>';
+                }
+
+                let itemNumber = (typeof item === 'object' && item.number) ? item.number : (index + 1);
+                let itemCategoryBadge = (typeof item === 'object' && item.category) 
+                    ? '<div class="mb-1.5"><span class="inline-block bg-blue-100 text-blue-800 text-xs font-bold px-2.5 py-0.5 rounded tracking-wide border border-blue-200">[' + item.category + ']</span></div>' 
+                    : '';
+
+                return '<tr class="border-b hover:bg-gray-50 transition duration-150">' +
+                    '<td class="p-3 text-center font-bold text-base align-middle w-12 text-gray-700">' + itemNumber + '</td>' +
+                    '<td class="p-3 text-base align-middle">' + itemCategoryBadge + '<div class="leading-relaxed text-gray-800 font-medium">' + formattedText + '</div></td>' +
+                    '<td class="p-3 align-middle ' + cellWidthClass + '">' + optionContainerHtml + '</td>' +
+                    '<td class="p-3 text-center align-middle w-16"><span id="nilai-' + key + '-' + index + '" class="inline-block bg-gray-200 text-gray-600 font-bold rounded-full w-8 h-8 leading-8 text-center text-base">0</span></td>' +
+                '</tr>';
+            }).join('');
+
+            var nextInfo = nextInstrumenMap[key];
+            var nextBtnHtml = '';
+            if (nextInfo) {
+                nextBtnHtml = 
+                    '<button id="next-btn-' + key + '" disabled onclick="goToNextInstrumen(\'' + key + '\')" title="Simpan penilaian terlebih dahulu untuk mengaktifkan tombol ini" class="btn-next-disabled flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg font-bold text-base transition duration-200 w-full sm:w-auto">' +
+                        '<span>' + nextInfo.label + '</span>' +
+                        '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>' +
+                    '</button>';
+            }
+
+            var guruCardHtml = '';
+            if (key === 'perencanaan_pm' || key === 'implementasi_pm') {
+                guruCardHtml = 
+                    '<div class="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 mb-6 shadow-sm no-print">' +
+                        '<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">' +
+                            '<div class="flex-1">' +
+                                '<label class="block text-sm font-bold text-blue-900 mb-1.5 flex items-center gap-2">' +
+                                    '<span>👤</span><span>Pilih Guru yang Disupervisi:</span>' +
+                                '</label>' +
+                                '<select id="select-guru-' + key + '" onchange="changeActiveGuruFromDropdown(this.value)" class="w-full bg-white border border-blue-300 text-gray-800 text-base rounded-lg p-2.5 font-bold shadow-sm focus:ring-2 focus:ring-blue-500 cursor-pointer">' +
+                                    '<option value="">-- Memuat daftar guru... --</option>' +
+                                '</select>' +
+                                '<p class="text-xs text-blue-600 mt-1">Data guru diambil dari daftar guru di Dashboard</p>' +
+                            '</div>' +
+                            '<div class="lg:w-3/5 grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white p-3.5 rounded-lg border border-blue-100 shadow-sm">' +
+                                '<div class="border-l-4 border-blue-500 pl-2.5">' +
+                                    '<span class="text-xs text-gray-500 font-semibold block uppercase">Mata Pelajaran</span>' +
+                                    '<span id="card-mapel-' + key + '" class="font-bold text-gray-900 text-base truncate block">-</span>' +
+                                    '</div>' +
+                                '<div class="border-l-4 border-indigo-500 pl-2.5">' +
+                                    '<span class="text-xs text-gray-500 font-semibold block uppercase">Kelas</span>' +
+                                    '<span id="card-kelas-' + key + '" class="font-bold text-gray-900 text-base truncate block">-</span>' +
+                                '</div>' +
+                                '<div class="border-l-4 border-purple-500 pl-2.5">' +
+                                    '<span class="text-xs text-gray-500 font-semibold block uppercase">Semester</span>' +
+                                    '<span id="card-semester-' + key + '" class="font-bold text-gray-900 text-base truncate block">-</span>' +
+                                '</div>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>';
+            }
+
+            // Rubrik Guide Banner untuk Supervisi Administrasi, Penelaah ATP, Penelaah Modul Ajar, dan Observasi
+            var rubrikGuideHtml = '';
+            if (isThreeOptionMode) {
+                var optsGuide = data.options.map(function(o) {
+                    var bg = o.v === 0 ? 'bg-red-100 text-red-700 border-red-200' : (o.v === 1 ? 'bg-yellow-100 text-yellow-800 border-yellow-200' : 'bg-green-100 text-green-700 border-green-200');
+                    var cleanL = o.l.replace(/\s*\(\d+\)/, '');
+                    return '<span class="inline-flex items-center gap-1.5 bg-white px-3 py-1 rounded-lg border border-gray-200 shadow-sm">' +
+                        '<strong class="' + bg + ' border px-2 py-0.5 rounded-full font-black text-xs">' + o.v + '</strong>' +
+                        '<span class="font-bold text-gray-800 text-xs">' + cleanL + '</span>' +
+                    '</span>';
+                }).join('');
+
+                rubrikGuideHtml = 
+                    '<div class="mb-5 p-3.5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl flex flex-wrap items-center justify-between text-xs text-blue-900 gap-3 no-print shadow-sm">' +
+                        '<div class="font-bold flex items-center gap-2 text-sm text-blue-950">' +
+                            '<span>📋</span><span>Panduan Skor Pilihan (Format Baris):</span>' +
+                        '</div>' +
+                        '<div class="flex items-center gap-2.5 flex-wrap">' + optsGuide + '</div>' +
+                    '</div>';
+            }
+
+            var thPilihSkorHtml = isThreeOptionMode
+                ? '<th class="p-3 w-[480px] min-w-[380px] text-center align-middle">' +
+                    '<div class="font-bold text-base">Pilihan Skor (Berbentuk Baris)</div>' +
+                    '<div class="grid grid-cols-3 gap-2 mt-1 text-[11px] font-semibold text-blue-200">' +
+                        data.options.map(function(o) { return '<span class="bg-blue-800/80 rounded py-0.5 border border-blue-700/60">Skor ' + o.v + '</span>'; }).join('') +
+                    '</div>' +
+                  '</th>'
+                : '<th class="p-3 w-72 min-w-[240px] text-center align-middle">' +
+                    '<div class="font-bold text-base">Pilih Skor</div>' +
+                    '<div class="flex justify-between px-2 mt-1 text-[11px] font-semibold text-blue-200">' +
+                        '<span>0</span><span>1</span><span>2</span><span>3</span><span>4</span>' +
+                    '</div>' +
+                  '</th>';
+
+            section.innerHTML = 
+                '<div class="flex items-center justify-between mb-4">' +
+                    '<h2 class="text-2xl font-bold text-gray-700">' + data.title + '</h2>' +
+                    '<button id="pdf-btn-' + key + '" onclick="downloadPDF(\'' + data.id + '\', \'' + data.title.replace(/\s+/g, '_') + '\')" class="no-print flex items-center gap-2 bg-purple-700 hover:bg-purple-800 text-white font-semibold py-2 px-4 rounded-lg shadow transition">' +
+                        '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>' +
+                        '<span>Download PDF</span>' +
+                    '</button>' +
+                '</div>' +
+                guruCardHtml +
+                rubrikGuideHtml +
+                '<div class="bg-white p-6 rounded-lg shadow">' +
+                    '<div class="overflow-x-auto">' +
+                        '<table class="w-full text-left border-collapse">' +
+                            '<thead><tr class="bg-blue-900 text-white">' +
+                                '<th class="p-3 w-12 text-center align-middle font-bold">No</th>' +
+                                '<th class="p-3 align-middle font-bold">Aspek yang Dinilai</th>' +
+                                thPilihSkorHtml +
+                                '<th class="p-3 w-16 text-center align-middle font-bold">Nilai</th>' +
+                            '</tr></thead>' +
+                            '<tbody>' + itemsHtml + '</tbody>' +
+                        '</table>' +
+                    '</div>' +
+                    '<div class="mt-6 flex flex-col md:flex-row md:items-center justify-between bg-gray-100 p-5 rounded-lg border border-gray-200 gap-4">' +
+                        '<div>' +
+                            '<p class="text-xl text-gray-700 font-medium">Total Skor: <span id="skor-' + key + '" class="font-bold text-xl text-gray-900">0</span> / ' + data.maxScore + '</p>' +
+                            '<p class="text-xl text-gray-700 font-medium">Nilai Akhir: <span id="persen-' + key + '" class="font-bold text-xl text-gray-900">0%</span></p>' +
+                            '<p class="text-xl text-gray-700 font-medium">Predikat: <span id="predikat-' + key + '" class="font-bold text-blue-600">-</span></p>' +
+                        '</div>' +
+                        '<div class="no-print flex flex-col items-stretch sm:items-end gap-2.5">' +
+                            '<button onclick="submitInstrumen(\'' + key + '\')" class="w-full sm:w-auto flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white px-6 py-2.5 rounded-lg shadow font-bold text-base transition duration-200">' +
+                                '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>' +
+                                '<span>Simpan Penilaian</span>' +
+                            '</button>' +
+                            nextBtnHtml +
+                        '</div>' +
+                    '</div>' +
+                '</div>';
+        }
+
+        Object.keys(instrumenData).forEach(generateForm);
+
+        // ===== CALC SCORE =====
+        function calcScore(key, idx) {
+            const data = instrumenData[key];
+            const radios = document.querySelectorAll('.ans-' + key);
+            let total = 0;
+            radios.forEach(function(r) { if (r.checked) total += parseInt(r.value || 0); });
+            
+            var badge = document.getElementById('nilai-' + key + '-' + idx);
+            if (badge) {
+                var checkedRadio = document.querySelector('input[name="ans-' + key + '-' + idx + '"]:checked');
+                var val = checkedRadio ? parseInt(checkedRadio.value) : 0;
+                badge.innerText = val;
+                if (val === 0) {
+                    badge.className = 'inline-block font-bold rounded-full w-8 h-8 leading-8 text-center text-base bg-red-100 text-red-700';
+                } else if (val === 1) {
+                    badge.className = 'inline-block font-bold rounded-full w-8 h-8 leading-8 text-center text-base bg-yellow-100 text-yellow-700';
+                } else {
+                    badge.className = 'inline-block font-bold rounded-full w-8 h-8 leading-8 text-center text-base bg-green-100 text-green-700';
+                }
+            }
+
+            var persen = (total / data.maxScore) * 100;
+            var predikat = "Kurang";
+            if (persen >= 91) predikat = "Sangat Baik";
+            else if (persen >= 81) predikat = "Baik";
+            else if (persen >= 71) predikat = "Cukup";
+
+            document.getElementById('skor-' + key).innerText = total;
+            document.getElementById('persen-' + key).innerText = persen.toFixed(2) + '%';
+            document.getElementById('predikat-' + key).innerText = predikat;
+
+            if (key === 'perencanaan_pm' || key === 'implementasi_pm') {
+                renderHasilUmpanBalik();
+            }
+        }
+
+        // ===== LOGIKA HASIL UMPAN BALIK PM =====
+        function getPMPredikat(persen) {
+            if (persen >= 91) return "Sangat Baik";
+            if (persen >= 81) return "Baik";
+            if (persen >= 71) return "Cukup";
+            return "Kurang";
+        }
+
+        function renderHasilUmpanBalik() {
+            var rencMax = (instrumenData['perencanaan_pm'] && instrumenData['perencanaan_pm'].maxScore) || 60;
+            var obsMax = (instrumenData['implementasi_pm'] && instrumenData['implementasi_pm'].maxScore) || 60;
+            var maxGabungan = rencMax + obsMax;
+
+            var rencSkor = document.getElementById('skor-perencanaan_pm') ? parseInt(document.getElementById('skor-perencanaan_pm').innerText) || 0 : 0;
+            var rencPersen = rencMax > 0 ? (rencSkor / rencMax) * 100 : 0;
+            var rencPred = getPMPredikat(rencPersen);
+
+            var obsSkor = document.getElementById('skor-implementasi_pm') ? parseInt(document.getElementById('skor-implementasi_pm').innerText) || 0 : 0;
+            var obsPersen = obsMax > 0 ? (obsSkor / obsMax) * 100 : 0;
+            var obsPred = getPMPredikat(obsPersen);
+
+            var totalGabungan = rencSkor + obsSkor;
+            var persenGabungan = maxGabungan > 0 ? (totalGabungan / maxGabungan) * 100 : 0;
+            var predGabungan = getPMPredikat(persenGabungan);
+
+            // Update Cards
+            if (document.getElementById('pm-skor-rencana')) document.getElementById('pm-skor-rencana').innerText = rencSkor;
+            if (document.getElementById('pm-max-rencana')) document.getElementById('pm-max-rencana').innerText = rencMax;
+            if (document.getElementById('pm-persen-rencana')) document.getElementById('pm-persen-rencana').innerText = rencPersen.toFixed(2) + '%';
+            if (document.getElementById('pm-pred-rencana')) document.getElementById('pm-pred-rencana').innerText = rencPred;
+
+            if (document.getElementById('pm-skor-obs')) document.getElementById('pm-skor-obs').innerText = obsSkor;
+            if (document.getElementById('pm-max-obs')) document.getElementById('pm-max-obs').innerText = obsMax;
+            if (document.getElementById('pm-persen-obs')) document.getElementById('pm-persen-obs').innerText = obsPersen.toFixed(2) + '%';
+            if (document.getElementById('pm-pred-obs')) document.getElementById('pm-pred-obs').innerText = obsPred;
+
+            if (document.getElementById('pm-skor-gabungan')) document.getElementById('pm-skor-gabungan').innerText = totalGabungan;
+            if (document.getElementById('pm-max-gabungan')) document.getElementById('pm-max-gabungan').innerText = maxGabungan;
+            if (document.getElementById('pm-persen-gabungan')) document.getElementById('pm-persen-gabungan').innerText = persenGabungan.toFixed(2) + '%';
+            if (document.getElementById('pm-pred-gabungan')) document.getElementById('pm-pred-gabungan').innerText = predGabungan;
+
+            // Update Table
+            if (document.getElementById('table-pm-skor-rencana')) document.getElementById('table-pm-skor-rencana').innerText = rencSkor;
+            if (document.getElementById('table-pm-persen-rencana')) document.getElementById('table-pm-persen-rencana').innerText = rencPersen.toFixed(2) + '%';
+            if (document.getElementById('table-pm-pred-rencana')) document.getElementById('table-pm-pred-rencana').innerText = rencPred;
+
+            if (document.getElementById('table-pm-skor-obs')) document.getElementById('table-pm-skor-obs').innerText = obsSkor;
+            if (document.getElementById('table-pm-persen-obs')) document.getElementById('table-pm-persen-obs').innerText = obsPersen.toFixed(2) + '%';
+            if (document.getElementById('table-pm-pred-obs')) document.getElementById('table-pm-pred-obs').innerText = obsPred;
+
+            if (document.getElementById('table-pm-skor-gabungan')) document.getElementById('table-pm-skor-gabungan').innerText = totalGabungan;
+            if (document.getElementById('table-pm-persen-gabungan')) document.getElementById('table-pm-persen-gabungan').innerText = persenGabungan.toFixed(2) + '%';
+            if (document.getElementById('table-pm-pred-gabungan')) document.getElementById('table-pm-pred-gabungan').innerText = predGabungan;
+
+            // Auto-populate default feedback if inputs are still empty
+            var kEl = document.getElementById('pm_kekuatan');
+            var pEl = document.getElementById('pm_peningkatan');
+            var rEl = document.getElementById('pm_rekomendasi');
+            if (kEl && !kEl.value && pEl && !pEl.value && rEl && !rEl.value) {
+                autoGenerateFeedbackPM();
+            }
+        }
+
+        function autoGenerateFeedbackPM() {
+            var rencMax = (instrumenData['perencanaan_pm'] && instrumenData['perencanaan_pm'].maxScore) || 60;
+            var obsMax = (instrumenData['implementasi_pm'] && instrumenData['implementasi_pm'].maxScore) || 60;
+            var rencSkor = document.getElementById('skor-perencanaan_pm') ? parseInt(document.getElementById('skor-perencanaan_pm').innerText) || 0 : 0;
+            var rencPersen = rencMax > 0 ? (rencSkor / rencMax) * 100 : 0;
+            var obsSkor = document.getElementById('skor-implementasi_pm') ? parseInt(document.getElementById('skor-implementasi_pm').innerText) || 0 : 0;
+            var obsPersen = obsMax > 0 ? (obsSkor / obsMax) * 100 : 0;
+            var avgPersen = (rencPersen + obsPersen) / 2;
+
+            var kekuatan = "";
+            var peningkatan = "";
+            var rekomendasi = "";
+
+            if (avgPersen >= 85) {
+                kekuatan = "Rancangan Perencanaan PM (RPP) sangat komprehensif, perumusan tujuan pembelajaran terukur dan mencakup esensi pemahaman mendalam. Pada pelaksanaan di kelas, guru mampu menciptakan suasana belajar yang kondusif, memantik nalar kritis melalui pertanyaan pemantik, serta memfasilitasi kolaborasi dan refleksi bermakna.";
+                peningkatan = "Diferensiasi proses dan produk belajar dapat lebih dioptimalkan untuk memfasilitasi keberagaman kesiapan belajar murid, serta pengarsipan rubrik asesmen formatif secara berkala.";
+                rekomendasi = "1. Bagikan praktik baik telaah RPP dan pelaksanaan PM ini kepada rekan sejawat dalam Komunitas Belajar (Kombel) sekolah.\n2. Integrasikan pemanfaatan teknologi digital interaktif untuk eksplorasi mandiri peserta didik.\n3. Pertahankan konsistensi kegiatan refleksi bersama siswa di akhir sesi pembelajaran.";
+            } else if (avgPersen >= 70) {
+                kekuatan = "Perencanaan RPP sudah memuat komponen pokok pembelajaran mendalam dengan baik. Dalam proses implementasi, guru sudah berupaya memfasilitasi keaktifan siswa dan mengaitkan materi dengan konteks kehidupan nyata.";
+                peningkatan = "Perlu penguatan pada perumusan asesmen proses (formatif) yang lebih variatif, penguatan manajemen waktu pada kegiatan inti, serta pendalaman refleksi mandiri guru pasca observasi.";
+                rekomendasi = "1. Diskusikan penyusunan rubrik asesmen formatif bersama guru serumpun atau pengawas sekolah.\n2. Berikan porsi waktu yang lebih terstruktur bagi siswa untuk berdiskusi dan mengomunikasikan hasil pemahamannya.\n3. Lakukan pendampingan berkala melalui peer-coaching di sekolah.";
+            } else {
+                kekuatan = "Guru menunjukkan komitmen dan kesungguhan dalam menyusun RPP serta berupaya menerapkan langkah-langkah pembelajaran di kelas sesuai skenario awal.";
+                peningkatan = "Perlu penyesuaian langkah kegiatan pembelajaran agar lebih berpusat pada siswa (student-centered), kejelasan instrumen penilaian autentik, serta penguatan apersepsi dan stimulasi nalar kritis siswa.";
+                rekomendasi = "1. Jadwalkan sesi pendampingan klinis khusus (coaching) bersama Kepala Sekolah / Pengawas terkait penyelarasan RPP dan pelaksanaan PM.\n2. Kaji ulang modul ajar/RPP dengan menitikberatkan pada model pembelajaran berbasis masalah (PBL) atau proyek (PjBL).\n3. Lakukan simulasi peer-teaching sebelum pelaksanaan observasi berikutnya.";
+            }
+
+            if (document.getElementById('pm_kekuatan')) document.getElementById('pm_kekuatan').value = kekuatan;
+            if (document.getElementById('pm_peningkatan')) document.getElementById('pm_peningkatan').value = peningkatan;
+            if (document.getElementById('pm_rekomendasi')) document.getElementById('pm_rekomendasi').value = rekomendasi;
+        }
+
+        async function submitUmpanBalikPM(e) {
+            if (e && e.preventDefault) e.preventDefault();
+            if (!activeGuruId) {
+                showModal('Silakan pilih atau simpan Identitas Guru terlebih dahulu!', 'Belum Ada Guru', 'warning');
+                return;
+            }
+
+            var payload = {
+                guru_id: activeGuruId,
+                kekuatan: document.getElementById('pm_kekuatan') ? document.getElementById('pm_kekuatan').value : '',
+                peningkatan: document.getElementById('pm_peningkatan') ? document.getElementById('pm_peningkatan').value : '',
+                rekomendasi: document.getElementById('pm_rekomendasi') ? document.getElementById('pm_rekomendasi').value : ''
+            };
+
+            try {
+                var res = await fetch('/api/umpan-balik-pm', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    var statusEl = document.getElementById('pm-save-status');
+                    if (statusEl) {
+                        statusEl.classList.remove('hidden');
+                        setTimeout(function() { statusEl.classList.add('hidden'); }, 3000);
+                    }
+                    showModal('Catatan Umpan Balik PM berhasil disimpan ke database!', 'Berhasil Disimpan', 'success');
+                } else {
+                    var err = await res.json();
+                    showModal('Gagal menyimpan umpan balik PM: ' + (err.detail || 'Terjadi kesalahan'), 'Error', 'danger');
+                }
+            } catch (err) {
+                showModal('Gagal terhubung ke server: ' + err.message, 'Error', 'danger');
+            }
+        }
+
+        // ===== REFRESH DATA GURU =====
+        async function refreshDataGuru() {
+            var refreshBtns = document.querySelectorAll('.btn-refresh-action');
+            refreshBtns.forEach(function(btn) {
+                btn.disabled = true;
+                btn.classList.add('opacity-75', 'cursor-not-allowed');
+            });
+
+            var icons = document.querySelectorAll('.icon-refresh-spin');
+            icons.forEach(function(icon) {
+                icon.classList.add('animate-spin');
+            });
+
+            try {
+                await loadDashboard();
+
+                if (activeGuruId) {
+                    await selectGuruSilent(activeGuruId);
+                }
+
+                var alertEl = document.getElementById('alert');
+                if (alertEl) {
+                    alertEl.innerText = 'Data guru yang disupervisi berhasil diperbarui!';
+                    alertEl.classList.remove('hidden');
+                    alertEl.style.opacity = '1';
+                    setTimeout(function() {
+                        alertEl.style.opacity = '0';
+                        setTimeout(function() { alertEl.classList.add('hidden'); }, 300);
+                    }, 2500);
+                }
+            } catch (err) {
+                console.error("Error refreshing data guru:", err);
+                showModal('Gagal memperbarui data guru: ' + err.message, 'Error', 'danger');
+            } finally {
+                setTimeout(function() {
+                    refreshBtns.forEach(function(btn) {
+                        btn.disabled = false;
+                        btn.classList.remove('opacity-75', 'cursor-not-allowed');
+                    });
+                    icons.forEach(function(icon) {
+                        icon.classList.remove('animate-spin');
+                    });
+                }, 400);
+            }
+        }
+
+        // ===== GURU DROPDOWN CONTROLLER UNTUK PERENCANAAN PM, IMPLEMENTASI PM, DAN HASIL UMPAN BALIK =====
+        var allGuruList = [];
+
+        function parseKelasSemester(str) {
+            if (!str) return { kelas: '-', semester: '-' };
+            var s = String(str).trim();
+            if (s.includes('/')) {
+                var parts = s.split('/');
+                var k = parts[0].trim();
+                var semRaw = parts.slice(1).join('/').trim();
+                var sem = semRaw.toLowerCase().includes('semester') ? semRaw : ('Semester ' + semRaw);
+                return { kelas: k || '-', semester: sem || '-' };
+            }
+            if (s.toLowerCase().includes('semester')) {
+                var idx = s.toLowerCase().indexOf('semester');
+                return {
+                    kelas: s.substring(0, idx).trim() || s,
+                    semester: s.substring(idx).trim()
+                };
+            }
+            return { kelas: s, semester: 'Semester 1 (Ganjil)' };
+        }
+
+        function updateAllGuruDropdowns() {
+            var targetKeys = ['perencanaan_pm', 'implementasi_pm', 'hasil-umpan-balik'];
+            var activeGuru = (window.allGuruList || []).find(function(g) { return g.id == activeGuruId; });
+            if (!activeGuru && activeGuruData) {
+                activeGuru = activeGuruData;
+            }
+
+            var parsed = parseKelasSemester(activeGuru ? activeGuru.kelas_semester : '');
+            var mapel = activeGuru ? (activeGuru.mata_pelajaran || '-') : '-';
+            var kelas = parsed.kelas;
+            var semester = parsed.semester;
+
+            targetKeys.forEach(function(k) {
+                var sel = document.getElementById('select-guru-' + k);
+                if (sel) {
+                    var optionsHtml = '<option value="">-- Pilih Guru yang Disupervisi --</option>';
+                    (window.allGuruList || []).forEach(function(g) {
+                        var isSelected = (activeGuruId && g.id == activeGuruId) ? 'selected' : '';
+                        var statusText = g.status === 'Selesai' ? ' ✓ (Sudah Supervisi)' : '';
+                        optionsHtml += '<option value="' + g.id + '" ' + isSelected + '>' + g.nama_guru + ' - ' + (g.mata_pelajaran || 'IPAS') + ' (' + (g.kelas_semester || '-') + ')' + statusText + '</option>';
+                    });
+                    sel.innerHTML = optionsHtml;
+                    if (activeGuruId) {
+                        sel.value = activeGuruId;
+                    }
+                }
+
+                var elMapel = document.getElementById('card-mapel-' + k);
+                if (elMapel) elMapel.innerText = mapel;
+
+                var elKelas = document.getElementById('card-kelas-' + k);
+                if (elKelas) elKelas.innerText = kelas;
+
+                var elSem = document.getElementById('card-semester-' + k);
+                if (elSem) elSem.innerText = semester;
+            });
+        }
+
+        async function changeActiveGuruFromDropdown(guruId) {
+            if (!guruId) return;
+            await selectGuruSilent(parseInt(guruId));
+            updateAllGuruDropdowns();
+        }
+
+        // ===== API: DASHBOARD =====
+        async function loadDashboard() {
+            try {
+                var res = await fetch('/api/dashboard');
+                var data = await res.json();
+                document.getElementById('dash-total-guru').innerText = data.total_guru;
+                document.getElementById('dash-avg-obs').innerText = data.rata_rata_observasi;
+                document.getElementById('dash-total-sup').innerText = data.total_supervisi;
+                window.allGuruList = data.guru_list || [];
+                renderDashboardTable(window.allGuruList);
+
+                // Perbarui badge dan data rekap DB Pasca Umpan Balik
+                loadDbPascaUmpanBalik(true);
+
+                // Jika belum ada guru aktif dan daftar guru ada, aktifkan guru pertama secara otomatis
+                if (!activeGuruId && window.allGuruList && window.allGuruList.length > 0) {
+                    await selectGuruSilent(window.allGuruList[0].id);
+                } else {
+                    updateAllGuruDropdowns();
+                }
+            } catch (e) { console.error("Error loading dashboard", e); }
+        }
+
+        function renderDashboardTable(guruList) {
+            var tbody = document.getElementById('dashboard-table-body');
+            if (!tbody) return;
+            if (!guruList || guruList.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-400">Belum ada guru yang didaftarkan</td></tr>';
+                return;
+            }
+            tbody.innerHTML = guruList.map(function(g, idx) {
+                var isSelesai = g.status === 'Selesai';
+                var badgeClass = isSelesai ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800';
+                var badgeText = isSelesai ? '● Selesai' : '○ Belum Selesai';
+                return '<tr class="border-b hover:bg-gray-50">' +
+                    '<td class="p-3 text-center">' + (idx + 1) + '</td>' +
+                    '<td class="p-3 font-semibold">' + g.nama_guru + '</td>' +
+                    '<td class="p-3">' + (g.nip || '-') + '</td>' +
+                    '<td class="p-3">' + g.kelas_semester + '</td>' +
+                    '<td class="p-3">' + g.mata_pelajaran + '</td>' +
+                    '<td class="p-3 text-center"><span class="px-2 py-1 rounded-full text-xl font-bold ' + badgeClass + '">' + badgeText + '</span></td>' +
+                    '<td class="p-3 text-center">' +
+                        '<button onclick="selectGuru(' + g.id + ')" class="text-blue-600 hover:underline text-xl mr-2 font-medium">Pilih</button>' +
+                        '<button onclick="deleteGuru(' + g.id + ')" class="text-red-600 hover:underline text-xl font-medium">Hapus</button>' +
+                    '</td></tr>';
+            }).join('');
+        }
+
+        async function selectGuruSilent(id) {
+            activeGuruId = id;
+            var displayEl = document.getElementById('guru_id_display');
+            if (displayEl) displayEl.classList.remove('hidden');
+            var curEl = document.getElementById('current_guru_id');
+            if (curEl) curEl.innerText = id;
+            unlockMenus();
+
+            try {
+                var resGuru = await fetch('/api/guru/' + id);
+                if (resGuru.ok) {
+                    var dataGuru = await resGuru.json();
+                    activeGuruData = dataGuru.guru;
+                    if (document.getElementById('guru_nama')) document.getElementById('guru_nama').value = activeGuruData.nama_guru || '';
+                    if (document.getElementById('guru_nip')) document.getElementById('guru_nip').value = activeGuruData.nip || '';
+                    if (document.getElementById('guru_sekolah')) document.getElementById('guru_sekolah').value = activeGuruData.sekolah || '';
+                    if (document.getElementById('guru_jenjang')) document.getElementById('guru_jenjang').value = activeGuruData.jenjang || '';
+                    if (document.getElementById('guru_mapel')) document.getElementById('guru_mapel').value = activeGuruData.mata_pelajaran || '';
+                    if (document.getElementById('guru_kelas')) document.getElementById('guru_kelas').value = activeGuruData.kelas_semester || '';
+                }
+
+                var resSup = await fetch('/api/supervisi/' + id);
+                if (resSup.ok) {
+                    var sup = await resSup.json();
+                    ['administrasi', 'atp', 'modul_ajar', 'observasi', 'perencanaan_pm', 'implementasi_pm'].forEach(function(k) {
+                        var answers = sup[k + '_data'];
+                        if (answers && Object.keys(answers).length > 0) {
+                            Object.keys(answers).forEach(function(idx) {
+                                var val = answers[idx];
+                                var radio = document.querySelector('input[name="ans-' + k + '-' + idx + '"][value="' + val + '"]');
+                                if (radio) {
+                                    radio.checked = true;
+                                    calcScore(k, parseInt(idx));
+                                }
+                            });
+                            enableNextButton(k);
+                        } else {
+                            disableNextButton(k);
+                        }
+                    });
+                    if (document.getElementById('refleksi_text') && sup.refleksi) {
+                        document.getElementById('refleksi_text').value = sup.refleksi;
+                    }
+                    if (document.getElementById('umpan_balik_text') && sup.umpan_balik) {
+                        document.getElementById('umpan_balik_text').innerText = sup.umpan_balik;
+                    }
+                    if (document.getElementById('tindak_lanjut_text') && sup.tindak_lanjut) {
+                        document.getElementById('tindak_lanjut_text').innerText = sup.tindak_lanjut;
+                    }
+                    if (sup.umpan_balik_pm) {
+                        if (document.getElementById('pm_kekuatan')) document.getElementById('pm_kekuatan').value = sup.umpan_balik_pm.kekuatan || '';
+                        if (document.getElementById('pm_peningkatan')) document.getElementById('pm_peningkatan').value = sup.umpan_balik_pm.peningkatan || '';
+                        if (document.getElementById('pm_rekomendasi')) document.getElementById('pm_rekomendasi').value = sup.umpan_balik_pm.rekomendasi || '';
+                    }
+                    renderHasilUmpanBalik();
+                }
+            } catch (err) {
+                console.error("Error loading guru details:", err);
+            } finally {
+                updateAllGuruDropdowns();
+            }
+        }
+
+        async function selectGuru(id) {
+            await selectGuruSilent(id);
+            updateAllGuruDropdowns();
+            var nama = (activeGuruData && activeGuruData.nama_guru) ? activeGuruData.nama_guru : ('ID ' + id);
+            showModal('Guru "' + nama + '" dipilih. Silakan lanjut ke instrumen supervisi atau unduh dokumen PDF.', 'Guru Dipilih', 'success');
+            
+            // Pindah langsung ke menu pertama pra-observasi
+            var targetBtn = document.querySelector('[onclick*="sup-admin"]');
+            nav('sup-admin', targetBtn);
+        }
+
+        function deleteGuru(id) {
+            showModalConfirm('Yakin ingin menghapus guru ini dan semua data supervisinya?', 'Hapus Guru', function() {
+                fetch('/api/guru/' + id, { method: 'DELETE' })
+                    .then(function() { 
+                        if (activeGuruId === id) {
+                            activeGuruId = null;
+                            activeGuruData = null;
+                        }
+                        loadDashboard(); 
+                        showModal('Guru berhasil dihapus.', 'Berhasil', 'success'); 
+                    });
+            });
+        }
+
+        // ===== API: IDENTITAS =====
+        async function submitIdentitas(e) {
+            e.preventDefault();
+            var payload = {
+                nama_guru: document.getElementById('guru_nama').value,
+                nip: document.getElementById('guru_nip') ? document.getElementById('guru_nip').value : '',
+                sekolah: document.getElementById('guru_sekolah').value,
+                jenjang: document.getElementById('guru_jenjang').value,
+                mata_pelajaran: document.getElementById('guru_mapel').value,
+                kelas_semester: document.getElementById('guru_kelas').value
+            };
+            try {
+                var res = await fetch('/api/guru', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                if (!res.ok) {
+                    var err = await res.json();
+                    showModal('Gagal menyimpan: ' + JSON.stringify(err.detail || err), 'Error', 'danger');
+                    return;
+                }
+                var data = await res.json();
+                activeGuruId = data.id;
+                activeGuruData = {
+                    id: data.id,
+                    nama_guru: payload.nama_guru,
+                    nip: payload.nip,
+                    sekolah: payload.sekolah,
+                    jenjang: payload.jenjang,
+                    mata_pelajaran: payload.mata_pelajaran,
+                    kelas_semester: payload.kelas_semester
+                };
+                document.getElementById('guru_id_display').classList.remove('hidden');
+                document.getElementById('current_guru_id').innerText = activeGuruId;
+                
+                // UNLOCK SEMUA MENU PILIHAN SETELAH IDENTITAS DISIMPAN
+                unlockMenus();
+
+                // Reset dan nonaktifkan tombol selanjutnya untuk guru baru
+                ['administrasi', 'atp', 'modul_ajar', 'observasi', 'perencanaan_pm', 'implementasi_pm'].forEach(function(k) {
+                    disableNextButton(k);
+                });
+
+                if (document.getElementById('pm_kekuatan')) document.getElementById('pm_kekuatan').value = '';
+                if (document.getElementById('pm_peningkatan')) document.getElementById('pm_peningkatan').value = '';
+                if (document.getElementById('pm_rekomendasi')) document.getElementById('pm_rekomendasi').value = '';
+                renderHasilUmpanBalik();
+
+                showModal('Identitas guru berhasil disimpan! ID: ' + activeGuruId + '. Seluruh menu instrumen kini telah dibuka.', 'Berhasil', 'success');
+                loadDashboard();
+            } catch (e) {
+                showModal('Gagal menghubungi server: ' + e.message, 'Error', 'danger');
+            }
+        }
+
+        // ===== API: INSTRUMEN =====
+        async function submitInstrumen(key) {
+            if (!activeGuruId) {
+                showModal('Silakan isi Identitas Guru terlebih dahulu!', 'Belum Ada Guru', 'warning');
+                return;
+            }
+
+            var data = instrumenData[key];
+            var uncheckedItems = [];
+
+            data.items.forEach(function(item, index) {
+                if (typeof item === 'object' && item.isHeader) return;
+
+                var name = 'ans-' + key + '-' + index;
+                var checked = document.querySelector('input[name="' + name + '"]:checked');
+                if (!checked) {
+                    var itemLabel = '';
+                    if (typeof item === 'object') {
+                        if (item.isSubItem) {
+                            itemLabel = 'No. ' + item.parentNumber + '.' + item.subCode + ': ' + item.text.split('\n')[0];
+                        } else {
+                            itemLabel = 'No. ' + (item.number || (index + 1)) + ': ' + item.text.split('\n')[0];
+                        }
+                    } else {
+                        itemLabel = (index + 1) + '. ' + item;
+                    }
+                    uncheckedItems.push(itemLabel);
+                }
+            });
+
+            if (uncheckedItems.length > 0) {
+                showModal('Masih ada item yang belum dipilih!\n\nSilakan lengkapi:\n' + uncheckedItems.join('\n'), 'Item Belum Lengkap', 'warning');
+                return;
+            }
+
+            var dataJawaban = {};
+            data.items.forEach(function(item, index) {
+                if (typeof item === 'object' && item.isHeader) return;
+                var checked = document.querySelector('input[name="ans-' + key + '-' + index + '"]:checked');
+                if (checked) {
+                    dataJawaban[index] = parseInt(checked.value);
+                }
+            });
+
+            var payload = {
+                guru_id: activeGuruId,
+                kategori: key,
+                data_jawaban: dataJawaban
+            };
+
+            try {
+                var res = await fetch('/api/supervisi', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    showModal('Penilaian ' + data.title + ' berhasil disimpan! Tombol selanjutnya kini telah aktif.', 'Berhasil Disimpan', 'success');
+                    
+                    var pdfBtn = document.getElementById('pdf-btn-' + key);
+                    if (pdfBtn) {
+                        pdfBtn.disabled = false;
+                        pdfBtn.classList.remove('btn-pdf-disabled');
+                    }
+
+                    // Aktifkan tombol selanjutnya
+                    enableNextButton(key);
+
+                    if (key === 'perencanaan_pm' || key === 'implementasi_pm') {
+                        renderHasilUmpanBalik();
+                    }
+                } else {
+                    showModal('Gagal menyimpan penilaian.', 'Error', 'danger');
+                }
+            } catch (e) {
+                showModal('Error: ' + e.message, 'Error', 'danger');
+            }
+        }
+
+        // ===== API: REFLEKSI =====
+        async function submitRefleksi(e) {
+            e.preventDefault();
+            if (!activeGuruId) {
+                showModal('Identitas Guru belum diisi!', 'Perhatian', 'warning');
+                return;
+            }
+
+            var payload = {
+                guru_id: activeGuruId,
+                refleksi: document.getElementById('refleksi_text').value
+            };
+
+            try {
+                var res = await fetch('/api/refleksi', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    var data = await res.json();
+                    showModal('Refleksi berhasil disimpan! Umpan balik dan tindak lanjut sudah dibuat otomatis.', 'Berhasil', 'success');
+                    document.getElementById('umpan_balik_text').innerText = data.umpan_balik || 'Memproses...';
+                    document.getElementById('tindak_lanjut_text').innerText = data.tindak_lanjut || 'Memproses...';
+                } else {
+                    showModal('Gagal menyimpan refleksi.', 'Error', 'danger');
+                }
+            } catch (e) {
+                showModal('Error: ' + e.message, 'Error', 'danger');
+            }
+        }
+
+        // ===== API: KESIMPULAN =====
+        async function loadKesimpulan() {
+            try {
+                var res = await fetch('/api/kesimpulan-rekap');
+                if (res.ok) {
+                    var list = await res.json();
+                    var tbody = document.getElementById('kesimpulan-table-body');
+                    
+                    if (!list || list.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="20" class="p-4 text-center text-gray-400 border border-gray-300">Belum ada data supervisi guru</td></tr>';
+                        return;
+                    }
+
+                    tbody.innerHTML = list.map(function(item, idx) {
+                        return '<tr class="hover:bg-gray-50 text-center border-b border-gray-300">' +
+                            '<td class="p-2 border border-gray-300 font-bold">' + (idx + 1) + '</td>' +
+                            '<td class="p-2 border border-gray-300 text-left font-semibold">' + (item.nama_guru || '-') + '</td>' +
+                            '<td class="p-2 border border-gray-300">' + (item.nip || '-') + '</td>' +
+                            '<td class="p-2 border border-gray-300">' + (item.kelas_semester || '-') + '</td>' +
+                            
+                            // Administrasi
+                            '<td class="p-2 border border-gray-300">' + item.administrasi_skor + '</td>' +
+                            '<td class="p-2 border border-gray-300">' + item.administrasi_persen + '%</td>' +
+                            '<td class="p-2 border border-gray-300 font-semibold">' + item.administrasi_predikat + '</td>' +
+                            
+                            // ATP
+                            '<td class="p-2 border border-gray-300">' + item.atp_skor + '</td>' +
+                            '<td class="p-2 border border-gray-300">' + item.atp_persen + '%</td>' +
+                            '<td class="p-2 border border-gray-300 font-semibold">' + item.atp_predikat + '</td>' +
+                            
+                            // Modul Ajar
+                            '<td class="p-2 border border-gray-300">' + item.modul_ajar_skor + '</td>' +
+                            '<td class="p-2 border border-gray-300">' + item.modul_ajar_persen + '%</td>' +
+                            '<td class="p-2 border border-gray-300 font-semibold">' + item.modul_ajar_predikat + '</td>' +
+                            
+                            // Observasi
+                            '<td class="p-2 border border-gray-300">' + item.observasi_skor + '</td>' +
+                            '<td class="p-2 border border-gray-300">' + item.observasi_persen + '%</td>' +
+                            '<td class="p-2 border border-gray-300 font-semibold">' + item.observasi_predikat + '</td>' +
+                            
+                            // Pasca Observasi
+                            '<td class="p-2 border border-gray-300 text-left whitespace-pre-line min-w-[200px]">' + (item.refleksi || '-') + '</td>' +
+                            '<td class="p-2 border border-gray-300 text-left whitespace-pre-line min-w-[250px]">' + (item.umpan_balik || '-') + '</td>' +
+                            '<td class="p-2 border border-gray-300 text-left whitespace-pre-line min-w-[250px]">' + (item.tindak_lanjut || '-') + '</td>' +
+                            
+                            // Kesimpulan Narasi Otomatis
+                            '<td class="p-2 border border-gray-300 text-left leading-relaxed text-blue-900 bg-blue-50/50 font-medium">' + item.kesimpulan_narasi + '</td>' +
+                        '</tr>';
+                    }).join('');
+                }
+            } catch (e) {
+                console.error("Error loading kesimpulan rekap", e);
+            }
+        }
+
+        // ===== API & CONTROLLER: DB PASCA UMPAN BALIK =====
+        var allDbPascaList = [];
+
+        async function loadDbPascaUmpanBalik(silent) {
+            try {
+                var res = await fetch('/api/db-pasca-umpan-balik');
+                if (res.ok) {
+                    var data = await res.json();
+                    allDbPascaList = data || [];
+
+                    // Update Badge di Sidebar
+                    var countSelesai = allDbPascaList.filter(function(x) { return x.sudah_umpan_balik; }).length;
+                    var badgeEl = document.getElementById('badge-count-db-pm');
+                    if (badgeEl) badgeEl.innerText = countSelesai;
+
+                    // Update Kartu Statistik di Halaman DB Pasca Umpan Balik
+                    var countEl = document.getElementById('db-count-selesai');
+                    if (countEl) countEl.innerText = countSelesai;
+
+                    var completedList = allDbPascaList.filter(function(x) { return x.sudah_umpan_balik; });
+                    var totalPersen = 0;
+                    var ratedCount = 0;
+                    completedList.forEach(function(x) {
+                        if (x.total_pm_persen > 0) {
+                            totalPersen += x.total_pm_persen;
+                            ratedCount++;
+                        }
+                    });
+                    var avgPersen = ratedCount > 0 ? (totalPersen / ratedCount).toFixed(1) : 0;
+                    var avgPred = '-';
+                    if (avgPersen >= 91) avgPred = 'Sangat Baik';
+                    else if (avgPersen >= 76) avgPred = 'Baik';
+                    else if (avgPersen >= 61) avgPred = 'Cukup';
+                    else if (avgPersen > 0) avgPred = 'Kurang';
+
+                    var avgPersenEl = document.getElementById('db-avg-persen');
+                    if (avgPersenEl) avgPersenEl.innerText = avgPersen + '%';
+
+                    var predUmumEl = document.getElementById('db-predikat-umum');
+                    if (predUmumEl) predUmumEl.innerText = avgPred;
+
+                    var countCatatan = allDbPascaList.filter(function(x) {
+                        return (x.kekuatan && x.kekuatan.trim().length > 0) || (x.rekomendasi && x.rekomendasi.trim().length > 0);
+                    }).length;
+                    var catatanEl = document.getElementById('db-count-catatan');
+                    if (catatanEl) catatanEl.innerText = countCatatan;
+
+                    var countPending = allDbPascaList.length - countSelesai;
+                    var pendingEl = document.getElementById('db-count-pending');
+                    if (pendingEl) pendingEl.innerText = Math.max(0, countPending);
+
+                    filterDbPascaUmpanBalik();
+                } else {
+                    console.error("Gagal memuat DB pasca umpan balik");
+                }
+            } catch (err) {
+                console.error("Error loadDbPascaUmpanBalik:", err);
+            }
+        }
+
+        function filterDbPascaUmpanBalik() {
+            var searchInput = document.getElementById('db-search-input');
+            var query = (searchInput ? searchInput.value : '').toLowerCase().trim();
+
+            var statusFilter = document.getElementById('db-filter-status');
+            var filterVal = statusFilter ? statusFilter.value : 'all_completed';
+
+            var tbody = document.getElementById('db-pasca-umpan-balik-body');
+            if (!tbody) return;
+
+            var filtered = allDbPascaList.filter(function(item) {
+                if (filterVal === 'all_completed' && !item.sudah_umpan_balik) return false;
+                if (filterVal === 'pred_sangat_baik' && item.total_pm_predikat !== 'Sangat Baik') return false;
+                if (filterVal === 'pred_baik' && item.total_pm_predikat !== 'Baik') return false;
+                if (filterVal === 'pred_cukup' && item.total_pm_predikat !== 'Cukup' && item.total_pm_predikat !== 'Kurang') return false;
+
+                if (query) {
+                    var matchText = [
+                        item.nama_guru,
+                        item.nip,
+                        item.mata_pelajaran,
+                        item.kelas_semester,
+                        item.sekolah,
+                        item.kekuatan,
+                        item.rekomendasi,
+                        item.umpan_balik_observasi,
+                        item.status_umpan_balik
+                    ].join(' ').toLowerCase();
+
+                    if (!matchText.includes(query)) return false;
+                }
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                var emptyMsg = 'Tidak ada data guru yang sesuai dengan kriteria filter / pencarian.';
+                if (allDbPascaList.length === 0) {
+                    emptyMsg = 'Belum ada guru yang didaftarkan dalam sistem supervisi.';
+                } else if (filterVal === 'all_completed' && allDbPascaList.filter(function(x){ return x.sudah_umpan_balik; }).length === 0) {
+                    emptyMsg = 'Belum ada guru yang telah diberikan umpan balik. Buka menu Perencanaan PM atau Hasil Umpan Balik untuk memberikan umpan balik.';
+                }
+                tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-gray-500 font-medium bg-gray-50">' +
+                    '<div class="flex flex-col items-center justify-center gap-2">' +
+                        '<span class="text-3xl">📋</span>' +
+                        '<span>' + emptyMsg + '</span>' +
+                    '</div>' +
+                '</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(function(item, idx) {
+                var predColorClass = 'bg-gray-100 text-gray-700';
+                if (item.total_pm_predikat === 'Sangat Baik') predColorClass = 'bg-emerald-100 text-emerald-800 border border-emerald-300';
+                else if (item.total_pm_predikat === 'Baik') predColorClass = 'bg-blue-100 text-blue-800 border border-blue-300';
+                else if (item.total_pm_predikat === 'Cukup') predColorClass = 'bg-amber-100 text-amber-800 border border-amber-300';
+                else if (item.total_pm_predikat === 'Kurang') predColorClass = 'bg-rose-100 text-rose-800 border border-rose-300';
+
+                var summaryFeedback = '';
+                if (item.kekuatan || item.rekomendasi) {
+                    summaryFeedback = 
+                        (item.kekuatan ? '<div class="mb-1"><span class="font-bold text-xs text-emerald-700">💪 Kekuatan:</span> <span class="text-xs text-gray-800 leading-snug line-clamp-2">' + item.kekuatan + '</span></div>' : '') +
+                        (item.rekomendasi ? '<div><span class="font-bold text-xs text-blue-700">💡 Rekomendasi:</span> <span class="text-xs text-gray-800 leading-snug line-clamp-2">' + item.rekomendasi + '</span></div>' : '');
+                } else if (item.umpan_balik_observasi) {
+                    summaryFeedback = '<div class="text-xs text-gray-700 italic line-clamp-3">📝 ' + item.umpan_balik_observasi + '</div>';
+                } else {
+                    summaryFeedback = '<span class="text-xs text-gray-400 italic">Belum ada catatan deskriptif</span>';
+                }
+
+                var statusBadge = item.sudah_umpan_balik ? 
+                    '<span class="inline-flex items-center gap-1 text-[11px] font-bold text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full mt-1"><span>✓</span><span>Sudah Berumpan Balik</span></span>' :
+                    '<span class="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full mt-1"><span>○</span><span>Belum Lengkap</span></span>';
+
+                var safeName = (item.nama_guru || '').replace(/'/g, "\\'");
+
+                return '<tr class="border-b hover:bg-blue-50/40 transition duration-150">' +
+                    '<td class="p-3 text-center font-bold text-gray-600 align-middle">' + (idx + 1) + '</td>' +
+                    '<td class="p-3 align-top">' +
+                        '<div class="font-bold text-gray-900 text-base leading-tight">' + item.nama_guru + '</div>' +
+                        '<div class="text-xs text-gray-500 font-mono mt-0.5">NIP: ' + item.nip + '</div>' +
+                        statusBadge +
+                    '</td>' +
+                    '<td class="p-3 align-top">' +
+                        '<div class="font-semibold text-gray-800 text-sm">' + item.mata_pelajaran + '</div>' +
+                        '<div class="text-xs text-gray-600 mt-0.5">' + item.kelas_semester + '</div>' +
+                        '<div class="text-xs text-blue-600 mt-0.5 font-medium">' + item.sekolah + '</div>' +
+                    '</td>' +
+                    '<td class="p-3 text-center align-top">' +
+                        '<div class="font-black text-base text-blue-800">' + item.perencanaan_pm_skor + ' <span class="text-xs font-normal text-gray-500">/ 108</span></div>' +
+                        '<div class="text-xs font-semibold text-blue-600 mt-0.5">' + item.perencanaan_pm_persen + '%</div>' +
+                        '<div class="text-[11px] text-gray-500 font-medium">(' + item.perencanaan_pm_predikat + ')</div>' +
+                    '</td>' +
+                    '<td class="p-3 text-center align-top">' +
+                        '<div class="font-black text-base text-indigo-800">' + item.implementasi_pm_skor + ' <span class="text-xs font-normal text-gray-500">/ 128</span></div>' +
+                        '<div class="text-xs font-semibold text-indigo-600 mt-0.5">' + item.implementasi_pm_persen + '%</div>' +
+                        '<div class="text-[11px] text-gray-500 font-medium">(' + item.implementasi_pm_predikat + ')</div>' +
+                    '</td>' +
+                    '<td class="p-3 text-center align-top">' +
+                        '<div class="font-black text-lg text-gray-900">' + item.total_pm_skor + ' <span class="text-xs font-normal text-gray-500">/ 236</span></div>' +
+                        '<div class="mt-1">' +
+                            '<span class="inline-block px-2.5 py-1 rounded-full text-xs font-extrabold ' + predColorClass + '">' +
+                                item.total_pm_persen + '% • ' + item.total_pm_predikat +
+                            '</span>' +
+                        '</div>' +
+                    '</td>' +
+                    '<td class="p-3 align-top leading-snug">' +
+                        summaryFeedback +
+                    '</td>' +
+                    '<td class="p-3 text-center align-middle no-print">' +
+                        '<div class="flex flex-col gap-1.5 w-full">' +
+                            '<button onclick="bukaUmpanBalikGuru(' + item.id + ')" class="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold py-1.5 px-3 rounded-lg shadow-sm transition flex items-center justify-center gap-1.5">' +
+                                '<span>🔍</span><span>Lihat / Kelola</span>' +
+                            '</button>' +
+                            '<button onclick="cetakPdfGuru(' + item.id + ', \'' + safeName + '\')" class="w-full bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold py-1.5 px-3 rounded-lg shadow-sm transition flex items-center justify-center gap-1.5">' +
+                                '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>' +
+                                '<span>Cetak PDF</span>' +
+                            '</button>' +
+                        '</div>' +
+                    '</td>' +
+                '</tr>';
+            }).join('');
+        }
+
+        async function bukaUmpanBalikGuru(guruId) {
+            await selectGuruSilent(guruId);
+            updateAllGuruDropdowns();
+            var sub = document.getElementById('umpan-balik-pm-sub');
+            var arrow = document.getElementById('arrow-umpan-balik-pm-sub');
+            if (sub && !sub.classList.contains('open')) {
+                sub.classList.add('open');
+                if (arrow) arrow.classList.add('rotated');
+            }
+            var targetBtn = document.querySelector('[onclick*="hasil-umpan-balik"]');
+            nav('hasil-umpan-balik', targetBtn);
+        }
+
+        async function cetakPdfGuru(guruId, namaGuru) {
+            await selectGuruSilent(guruId);
+            updateAllGuruDropdowns();
+            downloadPDF('hasil-umpan-balik', 'Hasil_Umpan_Balik_PM_' + (namaGuru || 'Guru').replace(/\s+/g, '_'));
+        }
+
+        // ===== ON LOAD =====
+        window.onload = loadDashboard;
+    </script>
+
+    <!-- Modal Notification -->
+    <div id="modal-overlay" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center no-print" onclick="closeModal()">
+        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden transform transition-all" onclick="event.stopPropagation()">
+            <div id="modal-header" class="px-6 py-4 flex items-center gap-3">
+                <span id="modal-icon" class="text-2xl">⚠️</span>
+                <h3 id="modal-title" class="text-xl font-bold text-gray-800">Perhatian</h3>
+            </div>
+            <div class="px-6 pb-4">
+                <p id="modal-message" class="text-xl text-gray-600 whitespace-pre-line leading-relaxed"></p>
+            </div>
+            <div class="px-6 pb-5 flex justify-end">
+                <button onclick="closeModal()" id="modal-btn" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-semibold text-xl transition">Tutup</button>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

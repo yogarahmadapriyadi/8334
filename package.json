@@ -1,0 +1,15 @@
+{
+  "name": "aplikasi-supervisi-guru",
+  "version": "1.0.0",
+  "description": "Aplikasi Supervisi Guru untuk penilaian pra observasi, observasi pembelajaran, pasca observasi, dan rekapitulasi kesimpulan supervisi.",
+  "type": "module",
+  "scripts": {
+    "dev": "node server.js",
+    "build": "node -e \"console.log('Build ready')\"",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2"
+  }
+}

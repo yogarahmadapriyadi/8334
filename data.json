@@ -1,0 +1,47 @@
+{
+  "guru": [
+    {
+      "id": 1,
+      "nama": "Basuki, S.Kom.",
+      "nip": "1868867577775",
+      "nuptk": "475687980",
+      "jenjang": "SD",
+      "mapel": "IPAS",
+      "kelas": "III-A",
+      "golongan": "III.A",
+      "status": "Aktif",
+      "created_at": "2026-08-25T13:54:21.352830"
+    }
+  ],
+  "pra_observasi": [],
+  "observasi": [
+    {
+      "id": 1,
+      "guru_id": 1,
+      "nama_guru": "Basuki, S.Kom.",
+      "tgl_observasi": "2026-08-25",
+      "skor": {
+        "salam": 3,
+        "presensi": 3,
+        "apersepsi": 4,
+        "motivasi": 3,
+        "penyampaian": 2,
+        "metode": 2,
+        "media": 2,
+        "penguasaan": 4,
+        "waktu": 2,
+        "interaksi": 2,
+        "tugas": 1,
+        "difer": 2,
+        "tugasrumah": 2,
+        "doa": 4
+      },
+      "total_skor": 36,
+      "max_skor": 56,
+      "catatan": "perlu perbaikan pada ",
+      "created_at": "2026-08-25T14:11:00.480571"
+    }
+  ],
+  "tindak_lanjut": [],
+  "kesimpulan": []
+}
